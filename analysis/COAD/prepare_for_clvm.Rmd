@@ -174,5 +174,5 @@ sce$x <- scale_vec( 1 * (sce$msi_status == "msi-h") )
 And save the result:
 
 ```{r save-tumour-gene}
-saveRDS(sce, file = "../../data/COAD/sc_coad_clvm.rds")
+saveRDS(sce, file = "../../data/COAD/sce_coad_clvm.rds")
 ```

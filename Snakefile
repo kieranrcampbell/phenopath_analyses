@@ -14,7 +14,8 @@ R_opts = "--vanilla"
 rule all:
     input:
         "data/COAD/sce_coad.Rdata",
-        "data/COAD/sce_coad_clvm.rds"
+        "data/COAD/sce_coad_clvm.rds",
+	"data/COAD/clvm_results.rds"
 
 rule construct_scecoad:
     input:
@@ -48,4 +49,4 @@ rule coad_clvm:
     output:
         "data/COAD/clvm_results.rds"
     shell:
-        "Rscript {R_opts} {input} {output}"
+        "Rscript scripts/run_cavi.R {input} {output}"

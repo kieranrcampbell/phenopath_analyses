@@ -2,6 +2,7 @@
 # Run CAVI for CLVM and save result
 
 library(clvm)
+library(scater)
 
 args <- commandArgs(trailingOnly = TRUE)
 
