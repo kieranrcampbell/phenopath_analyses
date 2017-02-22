@@ -41,3 +41,11 @@ rule prepare_coad:
         "data/COAD/sce_coad_clvm.rds"
     shell:
         "Rscript -e \"rmarkdown::render('analysis/COAD/prepare_for_clvm.Rmd')\""
+
+rule coad_clvm:
+    input:
+        "data/COAD/sce_coad_clvm.rds"
+    output:
+        "data/COAD/clvm_results.rds"
+    shell:
+        "Rscript {R_opts} {input} {output}"
