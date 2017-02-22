@@ -59,6 +59,7 @@ rule coad_clvm:
 rule construct_sceov:
     input:
         "data/OV/TCGA_OV_tpm.tsv.gz",
+        "data/OV/TCGA_OV_counts.tsv.gz"
     output:
         "data/OV/sce_ov.rds"
     shell:

@@ -10,12 +10,23 @@ library(RTCGA.mutations)
 data("OV.mutations")
 
 ## Read in Kallisto quantified data
-ov <- read_tsv("/data/OV/TCGA_OV_tpm.tsv.gz")
+ov <- read_tsv("data/OV/TCGA_OV_tpm.tsv.gz")
 sample_names <- names(ov)[-1]
 ov <- data.frame(ov)
 names(ov)[1] <- "feature_id"
 rownames(ov) <- ov$feature_id; ov$feature_id <- NULL
 names(ov) <- sample_names
+
+ov_counts <- read_tsv("data/COAD/TCGA_COAD_counts.tsv.gz")
+sample_names <- names(ov_counts)[-1]
+ov_counts <- data.frame(ov_counts)
+names(ov_counts)[1] <- "feature_id"
+rownames(ov_counts) <- ov_counts$feature_id; ov_counts$feature_id <- NULL
+names(ov_counts) <- sample_names
+
+stopifnot(all.equal(dim(ov), dim(ov_counts)))
+stopifnot(all.equal(rownames(ov), rownames(ov_counts)))
+stopifnot(all.equal(colnames(ov), colnames(ov_counts)))
 
 ## Find feature names (ensembl transcript id + hgnc symbol) and gene types
 id_split <- strsplit(rownames(ov), "|", fixed = TRUE)
