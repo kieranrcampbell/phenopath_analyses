@@ -15,8 +15,10 @@ rule all:
     input:
         "data/COAD/sce_coad.rds",
         "data/COAD/sce_coad_clvm.rds",
-	"data/COAD/clvm_results.rds",
-	"data/OV/sce_ov.rds"
+        "data/COAD/clvm_results.rds",
+        "data/OV/sce_ov.rds",
+        "data/OV/sce_ov_clvm.rds",
+        "data/OV/clvm_results.rds"
 
 
 ## ------ COAD -----
@@ -65,3 +67,19 @@ rule construct_sceov:
         "data/OV/sce_ov.rds"
     shell:
         "Rscript {R_opts} scripts/OV/0_ov_to_sceset.R"
+
+rule prepare_ov:
+    input:
+        "data/OV/sce_ov.rds"
+    output:
+        "data/OV/sce_ov_clvm.rds"
+    shell:
+        "Rscript -e \"rmarkdown::render('analysis/OV/prepare_for_clvm.Rmd')\""
+
+rule ov_clvm:
+    input:
+        "data/OV/sce_ov_clvm.rds"
+    output:
+        "data/OV/ov_results.rds"
+    shell:
+        "Rscript scripts/run_cavi.R {input} {output}"
