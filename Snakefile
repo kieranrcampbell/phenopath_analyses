@@ -15,7 +15,8 @@ rule all:
     input:
         "data/COAD/sce_coad.rds",
         "data/COAD/sce_coad_clvm.rds",
-	"data/COAD/clvm_results.rds"
+	"data/COAD/clvm_results.rds",
+	"data/OV/sce_ov.rds"
 
 
 ## ------ COAD -----
