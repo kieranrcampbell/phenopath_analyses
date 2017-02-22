@@ -10,7 +10,7 @@ library(RTCGA.mutations)
 data("OV.mutations")
 
 ## Read in Kallisto quantified data
-ov <- read_tsv("../data/TCGA_OV_tpm.tsv.gz")
+ov <- read_tsv("/data/OV/TCGA_OV_tpm.tsv.gz")
 sample_names <- names(ov)[-1]
 ov <- data.frame(ov)
 names(ov)[1] <- "feature_id"
@@ -26,7 +26,7 @@ rownames(ov) <- feature_names
 
 ## Match CGHubAnalysisID with comparible ID in OV.clinical
 
-id_map <- read_csv("../data/TCGA_ID_MAP.csv") %>% filter(Disease == "OV")
+id_map <- read_csv("data/TCGA_ID_MAP.csv") %>% filter(Disease == "OV")
 
 to_tcga_barcode <- function(x) tolower(paste(strsplit(x, "-", fixed = T)[[1]][1:3], collapse = "-"))
 id_map %<>% mutate(patient_barcode = sapply(AliquotBarcode, to_tcga_barcode))
@@ -91,4 +91,4 @@ stopifnot(all.equal(sce$patient_barcode, pdata_df$patient_barcode))
 
 pData(sce) <- cbind(pData(sce), select(pdata_df, n_mutations, n_somatic, n_unknown))
 
-save(sce, file = "../data/sce_ovarian_kallisto.Rdata")
+saveRDS(sce, file = "data/OV/sce_ov.rds")

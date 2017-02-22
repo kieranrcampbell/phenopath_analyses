@@ -1,7 +1,7 @@
 ---
 title: "Immune-MSI interactions in colorectal cancer using Variational Bayes Phenotime"
 author: "Kieran Campbell"
-date: "7 January 2017"
+date: "February 2017"
 output: html_document
 ---
 
@@ -21,36 +21,23 @@ library(edgeR)
 library(limma)
 library(gplots)
 library(RColorBrewer)
+library(clvm)
 
 set.seed(123L)
 
 scale_vec <- function(x) (x - mean(x)) / sd(x)
 
-source("../cavi/phenotime_cavi.R")
 ```
 
 # Load data
 
-Done externally on the cluster:
+Load results:
 
 ```{r load-all-data}
-load("../variational_analysis/va_results_small_ard.Rdata")
+pcavi <- readRDS("../../data/COAD/clvm_results.rds")
+sce <- readRDS("../../data/COAD/sce_coad_clvm.rds")
 
-load("../data/sc_coad_gene.Rdata")
-
-sc <- sc_tumour_gene[retained_fnames, ]
-
-x_metastasis <- 1 * (sc$m_stage != "m0")
-x_metastasis[is.na(x_metastasis)] <- mean(x_metastasis, na.rm = TRUE)
-x_metastasis <- scale_vec(x_metastasis)
-
-#x_msi <- scale_vec( 1 * (sc$msi_status == "msi-h") )
-#x_msi <- sc$`nm_MSI-PCR_Result`# == "MSI-H"
-x_msi <- sc$msi_status == "msi-h"
-
-table(sc$msi_status, sc$`nm_MSI-PCR_Result`, useNA = "ifany")
-
-x <- cbind(x_msi, x_metastasis)
+x <- sce$x
 ```
 
 # Exploring phenotime results
@@ -58,34 +45,13 @@ x <- cbind(x_msi, x_metastasis)
 ## Comparison to PC1
 
 ```{r pseudotime-vs-pc1}
-pc1 <- prcomp(t(exprs(sc)), scale = TRUE)$x[,1]
+pc1 <- prcomp(t(exprs(sce)), scale = TRUE)$x[,1]
 
-qplot(scale_vec(pc1), scale_vec(pcavi$m_t), color = factor(x_msi)) +
+qplot(scale_vec(pc1), scale_vec(pcavi$m_t), color = factor(x)) +
   scale_color_brewer(palette = "Set1", name = "MSI-high") +
   stat_function(fun = function(x) x, color = 'black') + 
   xlab("PC1") + ylab(expression(z))
 ```
-
-Any correlation with survival?
-
-```{r survival}
-df_surv <- data_frame(status = sc$Overall_Survival_Status == "DECEASED", 
-                      phenotime = pcavi$m_t,
-                      phenotime_half = pcavi$m_t > 0,
-                      months = sc$Overall_Survival_Months, x_msi)
-df_surv$x_msi_high <- df_surv$x_msi == "msi-h"
-df_surv <- filter(df_surv, months < 100)
-
-s <- with(df_surv, Surv(time = months, event = status))
-
-fit <- coxph(s ~ phenotime, data = df_surv)
-
-km_as_one <- npsurv(s ~ 1, data = df_surv, conf.type = "log-log")
-km_by_phenotime <- npsurv(s ~ phenotime_half, data = df_surv, conf.type = "log-log")
-km_by_msi_and_phenotime <- npsurv(s ~ x_msi + phenotime_half, data = df_surv, conf.type = "log-log")
-km_by_msi <- npsurv(s ~ x_msi_high, data = df_surv, conf.type = "log-log")
-```
-
 
 ## Identifying significant genes
 
@@ -94,11 +60,11 @@ In the context of CAVI we have modelled each interaction coefficient by an appro
 $$ \beta_{pg} \sim \text{Normal}(m_{\beta_{pg}}, s_{\beta_{pg}}^2) $$
 We define a _significant_ interaction if the $2 \sigma$ posterior doesn't cross zero, ie
 
-$$ m_{\beta_{pg}} - 2 s_{\beta_{pg}} > 0 $$
+$$ m_{\beta_{pg}} - n s_{\beta_{pg}} > 0 $$
 or
-$$ m_{\beta_{pg}} + 2 s_{\beta_{pg}} < 0 $$
+$$ m_{\beta_{pg}} + n s_{\beta_{pg}} < 0 $$
 
-
+Here we use $n=3$:
 
 ```{r beta-df}
 df_beta <- data_frame(
@@ -106,9 +72,9 @@ df_beta <- data_frame(
   beta_msi = pcavi$m_beta[1,],
   chi_msi = pcavi$chi_exp[1,],
   alpha_msi = pcavi$m_alpha[1,],
-  gene = featureNames(sc),
-  is_mmr = fData(sc)$is_mmr,
-  is_sig = get_sig(pcavi)[1,]
+  gene = featureNames(sce),
+  is_mmr = fData(sce)$is_mmr,
+  is_sig = significant_interactions(pcavi, n = 3)
 )
 ```
 
@@ -123,7 +89,7 @@ _significant_ interactions.
 We can plot these:
 
 ```{r plot-sigs}
-chi_cutoff <- 0.5
+chi_cutoff <- 1
 df_beta <- mutate(df_beta, 
                   gene_symbol = sapply(strsplit(gene, "_"), `[`, 1))
 
@@ -153,32 +119,20 @@ We can plot expression along phenotime for the 35 _significant_ genes:
 ```{r exprs-along-pst, fig.width = 12, fig.height = 9}
 tmap <- pcavi$m_t
 
-# top_genes <- dplyr::arrange(df_beta, chi_msi) %>% 
-#   extract2("gene") %>% head(40)
 
 top_genes <- dplyr::filter(df_beta, is_sig) %>% 
   arrange(desc(abs(beta_msi))) %>% 
   extract2("gene") %>% head(n=20)
 
-t(exprs(sc))[, top_genes] %>% 
+t(exprs(sce))[, top_genes] %>% 
   as_data_frame() %>% 
-  dplyr::mutate(phenotime = tmap, x = factor(x_msi)) %>% 
+  dplyr::mutate(phenotime = tmap, x = factor(x)) %>% 
   gather(gene, expression, -phenotime, -x) %>% 
   ggplot(aes(x = phenotime, y = expression, color = x)) + geom_point(alpha = 0.4) +
   facet_wrap(~ gene, scales = "free_y") + 
   scale_color_brewer(palette = "Set1", name = "MSI") +
   theme(legend.position = "top", strip.text.x = element_text(size = 9)) +
   stat_smooth(se = FALSE, method = "lm", size = 2, formula = y ~ ns(x,3))
-
-t(exprs(sc))[, top_genes[ceiling(length(top_genes) / 2):length(top_genes)]] %>% 
-  as_data_frame() %>% 
-  dplyr::mutate(phenotime = tmap, x = factor(x_msi)) %>% 
-  gather(gene, expression, -phenotime, -x) %>% 
-  ggplot(aes(x = phenotime, y = expression, color = x)) + geom_point(alpha = 0.4) +
-  facet_wrap(~ gene, scales = "free_y") + 
-  scale_color_brewer(palette = "Set1", name = "MSI") +
-  theme(legend.position = "top", strip.text.x = element_text(size = 9)) +
-  stat_smooth(se = FALSE, method = "lm", size = 2)#, formula = y ~ ns(x,3))
 ```
 
 
@@ -186,11 +140,11 @@ What is phenotime? Check the immune response genes:
 
 ```{r immune-resp, fig.width = 7}
 immune_genes <- c("FOXP3", "CD4", "IL2RB")
-immune_inds <- match(immune_genes, fData(sc)$hgnc_symbol)
+immune_inds <- match(immune_genes, fData(sce)$hgnc_symbol)
 
-t(exprs(sc))[, immune_inds, drop=FALSE] %>% 
+t(exprs(sce))[, immune_inds, drop=FALSE] %>% 
   as_data_frame() %>% 
-  dplyr::mutate(phenotime = tmap, x = factor(x_msi)) %>% 
+  dplyr::mutate(phenotime = tmap, x = factor(x)) %>% 
   gather(gene, expression, -phenotime, -x) %>% 
   ggplot(aes(x = phenotime, y = expression, color = x)) + geom_point(alpha = 0.4) +
   facet_wrap(~ gene, scales = "free_y") + 
@@ -202,9 +156,9 @@ t(exprs(sc))[, immune_inds, drop=FALSE] %>%
 Nice immune response plot:
 
 ```{r nice-immune-response}
-df_immune <- t(exprs(sc))[, immune_inds, drop=FALSE] %>% 
+df_immune <- t(exprs(sce))[, immune_inds, drop=FALSE] %>% 
   as_data_frame() %>% 
-  dplyr::mutate(phenotime = tmap, x = factor(x_msi)) %>% 
+  dplyr::mutate(phenotime = tmap, x = factor(x)) %>% 
   gather(gene, expression, -phenotime, -x)
 
 df_immune <- mutate(df_immune, 
@@ -223,34 +177,17 @@ ggplot(df_immune, aes(x = phenotime, y = expression, color = gene_symbol)) +
 
 
 
-And look at the correlations of MLH1 and EPM2AIP1:
-
-```{r cool-genes}
-igenes <- c("MLH1", "EPM2AIP1")
-
-ii <- match(igenes, fData(sc_tumour_gene)$hgnc_symbol)
-
-t(exprs(sc_tumour_gene))[, ii, drop=FALSE] %>% 
-  as_data_frame() %>% 
-  dplyr::mutate(phenotime = tmap, x = factor(x_msi)) %>% 
-  gather(gene, expression, -phenotime, -x) %>% 
-  ggplot(aes(x = phenotime, y = expression, color = x)) + geom_point(alpha = 0.4) +
-  facet_wrap(~ gene, scales = "free_y") + 
-  scale_color_brewer(palette = "Set1", name = "MSI") +
-  theme(legend.position = "top", strip.text.x = element_text(size = 9)) +
-  stat_smooth(se = FALSE, method = "lm", size = 2)#, formula = y ~ ns(x,3))
-```
 
 Look at MLH1 in more detail:
 
 ```{r mlh1}
 mlh1 <- c("MLH1")
 
-mlh1_ind <- match(mlh1, fData(sc_tumour_gene)$hgnc_symbol)
+mlh1_ind <- match(mlh1, fData(sce)$hgnc_symbol)
 
-df_mlh1 <- t(exprs(sc_tumour_gene))[, mlh1_ind, drop=FALSE] %>% 
+df_mlh1 <- t(exprs(sce))[, mlh1_ind, drop=FALSE] %>% 
   as_data_frame() %>% 
-  dplyr::mutate(phenotime = tmap, x = as.character(x_msi)) %>% 
+  dplyr::mutate(phenotime = tmap, x = as.character(x)) %>% 
   gather(gene, expression, -phenotime, -x)
 
 df_mlh1$x[is.na(df_mlh1$x)] <- "NA"
@@ -258,7 +195,7 @@ df_mlh1$x <- plyr::mapvalues(df_mlh1$x, from = sort(unique(df_mlh1$x)), to = c("
 
 df_mlh1$x <- factor(df_mlh1$x, levels = c("MSI-low", "MSI-high"))
 
-df_mlh1_nox <- select(df_mlh1, -x)
+df_mlh1_nox <- dplyr::select(df_mlh1, -x)
 
 ggplot(df_mlh1, aes(x = phenotime, y = expression, color = x)) + 
   geom_point(data = df_mlh1_nox, color = "grey70") +
@@ -279,11 +216,11 @@ We'll use limma-voom for standard differential expression as to whether a tumour
 
 ```{r limma}
 # retained_fnames <- rownames(sc_tumour[rowSums(counts(sc_tumour)) > 20, ])
-dge <- DGEList(counts(sc))
+dge <- DGEList(counts(sce))
 dge <- calcNormFactors(dge)
 
-sc$msi_cov <- 1 * (sc$msi_status == "msi-h")
-design <- model.matrix(~ msi_cov, pData(sc))
+sce$msi_cov <- 1 * (sce$msi_status == "msi-h")
+design <- model.matrix(~ msi_cov, pData(sce))
 v <- voom(dge, design, plot = TRUE)
 
 fit <- lmFit(v, design)
@@ -297,8 +234,10 @@ And merge the results with phenotime:
 ```{r merge-with-us}
 int_df_limma <- dplyr::rename(df_beta, feature = gene)
 
-df_limma <- data_frame(msi_coef = fit$coefficients[,2], msi_pval = fit$p.value[,2],
-                       feature = featureNames(sc)) %>% 
+df_limma <- data_frame(msi_coef = fit$coefficients[,2], 
+                       msi_pval = fit$p.value[,2],
+                       mu = pcavi$m_mu,
+                       feature = featureNames(sce)) %>% 
   left_join(int_df_limma, by = "feature") %>% 
   dplyr::mutate(msi_log10pval = -log10(msi_pval)) 
 ```
@@ -306,8 +245,15 @@ df_limma <- data_frame(msi_coef = fit$coefficients[,2], msi_pval = fit$p.value[,
 Then we can compare in several ways. Firstly, are the $\alpha$ values consistent with the limma voom reported coefficients?
 
 ```{r compare-limma-alpha}
-ggplot(df_limma, aes(x = msi_coef, y = alpha_msi)) + geom_point(alpha = 0.5) +
+ggplot(df_limma, aes(x = msi_coef, y = alpha_msi)) + 
+  geom_point(alpha = 0.5) +
   xlab("Limma voom coefficient") + ylab(expression(paste("Phenotime ", alpha)))
+
+ggplot(df_limma, aes(x = msi_coef, y = alpha_msi, color = beta_msi)) + 
+  geom_point(alpha = 0.5) +
+  xlab("Limma voom coefficient") + 
+  ylab(expression(paste("Phenotime ", alpha))) +
+  scale_color_viridis()
 ```
 
 There is some "twisting" there which may be due to using a mixed effects model rather than straight forward DE.
@@ -328,14 +274,4 @@ ggplot(df_limma, aes(x = beta_msi, y = msi_log10pval)) + geom_point(alpha = 0.5)
 
 Again no obvious relationship.
 
-Cool heatmap:
-
-```{r heatmap}
-X <- t(scale(t(exprs(sc)[top_genes, order(tmap)])))
-X[abs(X) > 4.5] <- sign(X[abs(X) > 4.5]) * 4.5
-
-csc <- plyr::mapvalues(x_msi, from = sort(unique(x_msi)), to = brewer.pal(3, "Set1")[1:2])
-
-heatmap.2(X, col = "viridis", trace = "none", ColSideColors = csc)
-```
 

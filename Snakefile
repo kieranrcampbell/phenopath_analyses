@@ -17,6 +17,9 @@ rule all:
         "data/COAD/sce_coad_clvm.rds",
 	"data/COAD/clvm_results.rds"
 
+
+## ------ COAD -----
+
 rule construct_scecoad:
     input:
         "data/COAD/TCGA_COAD_tpm.tsv.gz",
@@ -50,3 +53,13 @@ rule coad_clvm:
         "data/COAD/clvm_results.rds"
     shell:
         "Rscript scripts/run_cavi.R {input} {output}"
+
+## ---- OV ----
+
+rule construct_sceov:
+    input:
+        "data/OV/TCGA_OV_tpm.tsv.gz",
+    output:
+        "data/OV/sce_ov.rds"
+    shell:
+        "Rscript {R_opts} scripts/OV/0_ov_to_sceset.R"
