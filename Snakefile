@@ -14,7 +14,7 @@ R_opts = "--vanilla"
 rule all:
     input:
         "data/COAD/sce_coad.Rdata",
-        "data/COAD/sce_coad_clvm.Rdata"
+        "data/COAD/sce_coad_clvm.rds"
 
 rule construct_scecoad:
     input:
@@ -38,6 +38,6 @@ rule prepare_coad:
     input:
         "data/COAD/sce_coad.Rdata"
     output:
-        "data/COAD/sce_coad_clvm.Rdata"
+        "data/COAD/sce_coad_clvm.rds"
     shell:
         "Rscript -e \"rmarkdown::render('analysis/COAD/prepare_for_clvm.Rmd')\""

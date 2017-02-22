@@ -18,7 +18,7 @@ library(curl)
 
 
 ```{r data-prep, cache = FALSE}
-load("data/sce_coad.Rdata")
+load("../../data/COAD/sce_coad.Rdata")
 sampleNames(sce) <- sampleNames(assayData(sce))
 sce <- sce[matrixStats::rowVars(tpm(sce)) > 0, ]
 is_exprs(sce) <- tpm(sce) > 0
@@ -160,17 +160,17 @@ to_use <- var_exprs > 0.5 | fData(sc_tumour_gene)$is_mmr
 print(paste("Retaining", sum(to_use), "genes"))
 print(paste(sum(fData(sc_tumour_gene)$is_mmr), "mmr genes"))
 
-sc <- sc_tumour_gene[to_use, ]
+sce <- sc_tumour_gene[to_use, ]
 ```
 
 Add in covariate:
 
 ```{r add-in-covariate}
-sc$x <- scale_vec( 1 * (sc$msi_status == "msi-h") )
+sce$x <- scale_vec( 1 * (sc$msi_status == "msi-h") )
 ```
 
 And save the result:
 
 ```{r save-tumour-gene}
-save(sc_tumour_gene, file = "data/COAD/sc_coad_clvm.Rdata")
+saveRDS(sce, file = "../../data/COAD/sc_coad_clvm.rds")
 ```
