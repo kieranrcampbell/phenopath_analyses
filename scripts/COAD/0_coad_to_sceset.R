@@ -12,14 +12,14 @@ data("COAD.mutations")
 
 ## Read in Kallisto quantified data
 ## Downloaded from https://osf.io/95wnv/
-coad <- read_tsv("data/TCGA_COAD_tpm.tsv.gz")
+coad <- read_tsv("data/COAD/TCGA_COAD_tpm.tsv.gz")
 sample_names <- names(coad)[-1]
 coad <- data.frame(coad)
 names(coad)[1] <- "feature_id"
 rownames(coad) <- coad$feature_id; coad$feature_id <- NULL
 names(coad) <- sample_names
 
-coad_counts <- read_tsv("data/TCGA_COAD_counts.tsv.gz")
+coad_counts <- read_tsv("data/COAD/TCGA_COAD_counts.tsv.gz")
 sample_names <- names(coad_counts)[-1]
 coad_counts <- data.frame(coad_counts)
 names(coad_counts)[1] <- "feature_id"
