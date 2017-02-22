@@ -34,6 +34,7 @@ feature_names <- sapply(id_split, function(x) paste0(x[1], "_", x[6]))
 gene_type <- sapply(id_split, `[`, 8)
 ensembl_gene_id <- sapply(id_split, `[`, 2)
 rownames(ov) <- feature_names
+rownames(ov_counts) <- feature_names
 
 ## Match CGHubAnalysisID with comparible ID in OV.clinical
 
@@ -66,17 +67,22 @@ centre <- factor(sapply(strsplit(ov_clinical$AliquotBarcode, "-"), `[`, 7))
 ov_clinical$plate <- factor(plate)
 ov_clinical$centre <- factor(centre)
 
-## Put clinical data in order corresponding to expression data
-ov_clinical <- ov_clinical[match(colnames(ov), ov_clinical$CGHubAnalysisID), ]
+common_cghub_ids <- intersect(colnames(ov), ov_clinical$CGHubAnalysisID)
+
+## Put clinical data in order corresponding to common_cghub_ids
+ov_clinical <- ov_clinical[match(common_cghub_ids, ov_clinical$CGHubAnalysisID), ]
+ov <- ov[, match(common_cghub_ids, names(ov))]
+ov_counts <- ov_counts[, match(common_cghub_ids, names(ov_counts))]
 stopifnot(all.equal(colnames(ov), ov_clinical$CGHubAnalysisID))
 
 ov_clinical_pd <- data.frame(ov_clinical)
 rownames(ov_clinical_pd) <- ov_clinical_pd$CGHubAnalysisID
 
-sce <- newSCESet(tpmData = as.matrix(ov), 
+sce <- newSCESet(countData = as.matrix(ov_counts),
                  phenoData = AnnotatedDataFrame(ov_clinical_pd))
+exprs(sce) <- log2(as.matrix(ov) + 1)
 
-sce <- sce[, sce$centre != 31] # get rid of the crappy centre
+# sce <- sce[, sce$centre != 31] # get rid of the crappy centre
 
 fData(sce)$gene_type <- gene_type
 fData(sce)$ensembl_gene_id <- ensembl_gene_id
