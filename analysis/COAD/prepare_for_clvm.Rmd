@@ -168,7 +168,7 @@ sce <- sc_tumour_gene[to_use, ]
 Add in covariate:
 
 ```{r add-in-covariate}
-sce$x <- scale_vec( 1 * (sc$msi_status == "msi-h") )
+sce$x <- scale_vec( 1 * (sce$msi_status == "msi-h") )
 ```
 
 And save the result:
