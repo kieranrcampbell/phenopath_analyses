@@ -20,7 +20,7 @@ scale_vec <- function(x) (x - mean(x)) / sd(x)
 
 
 ```{r data-prep, cache = FALSE}
-load("../../data/COAD/sce_coad.Rdata")
+sce <- readRDS("../../data/COAD/sce_coad.rds")
 sampleNames(sce) <- sampleNames(assayData(sce))
 sce <- sce[matrixStats::rowVars(tpm(sce)) > 0, ]
 is_exprs(sce) <- tpm(sce) > 0

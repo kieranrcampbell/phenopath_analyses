@@ -13,7 +13,7 @@ R_opts = "--vanilla"
 
 rule all:
     input:
-        "data/COAD/sce_coad.Rdata",
+        "data/COAD/sce_coad.rds",
         "data/COAD/sce_coad_clvm.rds",
 	"data/COAD/clvm_results.rds"
 
@@ -25,7 +25,7 @@ rule construct_scecoad:
         "data/COAD/nm.4191-S3.xlsx",
         "data/COAD/coadread_tcga_clinical_data.tsv"
     output:
-        "data/COAD/sce_coad.Rdata"
+        "data/COAD/sce_coad.rds"
     shell:
         "Rscript {R_opts} scripts/COAD/0_coad_to_sceset.R"
 
@@ -37,7 +37,7 @@ rule prepare_coad:
     an SCESet with
     """
     input:
-        "data/COAD/sce_coad.Rdata"
+        "data/COAD/sce_coad.rds"
     output:
         "data/COAD/sce_coad_clvm.rds"
     shell:

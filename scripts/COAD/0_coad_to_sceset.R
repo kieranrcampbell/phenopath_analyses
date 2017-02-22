@@ -167,4 +167,4 @@ pd3 <- left_join(pd3, coad_survival, by = "patient_barcode")
 stopifnot(all.equal(pd3$patient_barcode, pData(sce)$patient_barcode))
 pData(sce) <- pd3
 
-save(sce, file = "data/COAD/sce_coad.Rdata")
+saveRDS(sce, file = "data/COAD/sce_coad.rds")
