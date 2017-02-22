@@ -17,7 +17,7 @@ names(ov)[1] <- "feature_id"
 rownames(ov) <- ov$feature_id; ov$feature_id <- NULL
 names(ov) <- sample_names
 
-ov_counts <- read_tsv("data/COAD/TCGA_COAD_counts.tsv.gz")
+ov_counts <- read_tsv("data/OV/TCGA_OV_counts.tsv.gz")
 sample_names <- names(ov_counts)[-1]
 ov_counts <- data.frame(ov_counts)
 names(ov_counts)[1] <- "feature_id"
