@@ -6,12 +6,14 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
+knitr::opts_chunk$set(echo = TRUE, cache = FALSE)
 
 library(scater)
 library(tidyverse)
 library(magrittr)
 library(matrixStats)
+library(biomaRt)
+library(curl)
 ```
 
 
@@ -76,23 +78,55 @@ sc_tumour_gene <- summariseExprsAcrossFeatures(sc_tumour,
                                                summarise_by = "ensembl_gene_id")
 ```
 
-Add meta data:
+Download relevant data:
 
-```{r add-meta}
+```{r download-data}
 fData(sc_tumour_gene)$ensembl_gene_id <- fData(sc_tumour_gene)$exprs_collapsed_to
 
-sc_tumour_gene <- getBMFeatureAnnos(sc_tumour_gene, 
-                               filters = "ensembl_gene_id",
-                               attributes = c("ensembl_gene_id",
-                                              "hgnc_symbol",
-                                              "transcript_biotype"),
-                               feature_symbol = "hgnc_symbol",
-                               feature_id = "ensembl_gene_id",
-                               dataset = "hsapiens_gene_ensembl")
+fData(sc_tumour_gene)$ensembl_gene_id <- gsub(fData(sc_tumour_gene)$ensembl_gene_id, pattern = "\\.[0-9]+", replacement = "")
 
-featureNames(sc_tumour_gene) <- paste0(fData(sc_tumour_gene)$hgnc_symbol, "_",
-                                       fData(sc_tumour_gene)$exprs_collapsed_to)
+ensembl_gene_id <- fData(sc_tumour_gene)$ensembl_gene_id
 
+annotation_file <- "../../data/gene_annotations.csv"
+
+if(file.exists(annotation_file)) { # do nothing
+  gene_annos <- read_csv(annotation_file)
+} else if(has_internet()) {
+  mart <- useMart(biomart = 'ensembl', 
+          dataset = 'hsapiens_gene_ensembl')
+  gene_annos <- getBM(mart = mart, 
+                         filters = "ensembl_gene_id",
+                         attributes = c("ensembl_gene_id",
+                                        "hgnc_symbol",
+                                        "transcript_biotype"),
+              values = ensembl_gene_id)
+
+  write_csv(gene_annos, annotation_file)
+} else {
+  stop("Annotation file missing and ")
+}
+
+mm <- match(ensembl_gene_id, gene_annos$ensembl_gene_id)
+non_na_mm <- which(!is.na(mm))
+mm <- mm[non_na_mm]
+
+gene_annos <- gene_annos[mm, ]
+sc_tumour_gene <- sc_tumour_gene[non_na_mm, ]
+
+
+## Now add them in to the fData
+stopifnot(all.equal(fData(sc_tumour_gene)$ensembl_gene_id,
+                    gene_annos$ensembl_gene_id))
+
+for(nn in names(gene_annos)) {
+  fData(sc_tumour_gene)[[nn]] <- gene_annos[[nn]]
+}
+
+featureNames(sc_tumour_gene) <- paste0(fData(sc_tumour_gene)$hgnc_symbol, "_", fData(sc_tumour_gene)$ensembl_gene_id)
+
+```
+
+```{r add-meta}
 pseudogenes <- grepl("pseudogene", fData(sc_tumour_gene)$transcript_biotype)
 not_pseudogene <- which(!pseudogenes)
 
