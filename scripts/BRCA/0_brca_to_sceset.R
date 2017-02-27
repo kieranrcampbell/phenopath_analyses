@@ -89,22 +89,22 @@ fData(sce)$ensembl_gene_id <- ensembl_gene_id
 
 
 # Somatic Mutations -------------------------------------------------------
-to_patient_barcode <- function(bcr_barcode) {
-  tolower(paste0(strsplit(bcr_barcode, "-")[[1]][1:3], collapse = "-"))
-}
-
-patient_mutations <- BRCA.mutations %>% 
-  filter(bcr_patient_barcode != "bcr_patient_barcode") %>% # I mean come on
-  group_by(bcr_patient_barcode) %>% 
-  summarise(n_mutations = n(), n_somatic = sum(Mutation_Status == "Somatic"),
-            n_unknown = sum(Mutation_Status == "Unknown")) %>% 
-  mutate(patient_barcode = sapply(bcr_patient_barcode, to_patient_barcode))
-
-pdata_df <- select(pData(sce), patient_barcode)
-pdata_df <- left_join(pdata_df, patient_mutations, by = "patient_barcode")
-
-stopifnot(all.equal(sce$patient_barcode, pdata_df$patient_barcode))
-
-pData(sce) <- cbind(pData(sce), select(pdata_df, n_mutations, n_somatic, n_unknown))
+# to_patient_barcode <- function(bcr_barcode) {
+#   tolower(paste0(strsplit(bcr_barcode, "-")[[1]][1:3], collapse = "-"))
+# }
+# 
+# patient_mutations <- BRCA.mutations %>% 
+#   filter(bcr_patient_barcode != "bcr_patient_barcode") %>% # I mean come on
+#   group_by(bcr_patient_barcode) %>% 
+#   summarise(n_mutations = n(), n_somatic = sum(Mutation_Status == "Somatic"),
+#             n_unknown = sum(Mutation_Status == "Unknown")) %>% 
+#   mutate(patient_barcode = sapply(bcr_patient_barcode, to_patient_barcode))
+# 
+# pdata_df <- select(pData(sce), patient_barcode)
+# pdata_df <- left_join(pdata_df, patient_mutations, by = "patient_barcode")
+# 
+# stopifnot(all.equal(sce$patient_barcode, pdata_df$patient_barcode))
+# 
+# pData(sce) <- cbind(pData(sce), select(pdata_df, n_mutations, n_somatic, n_unknown))
 
 saveRDS(sce, file = "data/BRCA/sce_brca.rds")
