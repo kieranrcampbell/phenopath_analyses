@@ -10,7 +10,7 @@ library(RTCGA.mutations)
 data("BRCA.mutations")
 
 ## Read in Kallisto quantified data
-brca <- read_tsv("data/OV/TCGA_BRCA_tpm.tsv.gz")
+brca <- read_tsv("data/BRCA/TCGA_BRCA_tpm.tsv.gz")
 sample_names <- names(brca)[-1]
 brca <- data.frame(brca)
 names(brca)[1] <- "feature_id"

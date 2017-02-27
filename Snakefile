@@ -18,7 +18,8 @@ rule all:
         "data/COAD/clvm_results.rds",
         "data/OV/sce_ov.rds",
         "data/OV/sce_ov_clvm.rds",
-        "data/OV/clvm_results.rds"
+        "data/OV/clvm_results.rds",
+	"data/BRCA/sce_brca.rds"
 
 
 ## ------ COAD -----
@@ -86,7 +87,7 @@ rule ov_clvm:
 
 ## ---- BRCA ----
 
-rule construct_sceov:
+rule construct_scebrca:
     input:
         "data/BRCA/TCGA_BRCA_tpm.tsv.gz",
         "data/BRCA/TCGA_BRCA_counts.tsv.gz"
