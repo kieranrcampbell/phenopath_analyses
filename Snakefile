@@ -95,3 +95,12 @@ rule construct_scebrca:
         "data/BRCA/sce_brca.rds"
     shell:
         "Rscript {R_opts} scripts/BRCA/0_brca_to_sceset.R"
+
+rule prepare_brca:
+    input:
+        "data/BRCA/sce_brca.rds"
+    output:
+        "data/BRCA/sce_brca_clvm.rds",
+        "data/BRCA/sce_brca_gene_level.rds"
+    shell:
+        "Rscript -e \"rmarkdown::render('analysis/BRCA/prepare_for_clvm.Rmd')\""

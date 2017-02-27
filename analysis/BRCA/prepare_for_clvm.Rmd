@@ -1,0 +1,133 @@
+---
+title: "Preparation of BRCA SCESet for phenotime"
+author: "Kieran Campbell"
+date: "9 October 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = FALSE)
+
+library(scater)
+library(tidyverse)
+library(magrittr)
+library(matrixStats)
+library(biomaRt)
+library(curl)
+
+scale_vec <- function(x) (x - mean(x)) / sd(x)
+```
+
+
+```{r data-prep, cache = FALSE}
+sce <- readRDS("../../data/BRCA/sce_brca.rds")
+# sampleNames(sce) <- sampleNames(assayData(sce))
+sce <- sce[matrixStats::rowVars(exprs(sce)) > 0, ]
+is_exprs(sce) <- exprs(sce) > 0
+sce <- calculateQCMetrics(sce)
+
+hgnc_symbols <- sapply(strsplit(featureNames(sce), "_"), `[`, 2)
+
+dvar <- data_frame(var_exprs = matrixStats::rowVars(exprs(sce)),
+                   hgnc_symbols)
+
+fData(sce)$var_exprs <- dvar$var_exprs
+fData(sce)$hgnc_symbols <- hgnc_symbols
+
+## group factors to avoid low frequency ones
+gt_table <- table(fData(sce)$gene_type)
+new_gt_names <- names(gt_table)
+new_gt_names[gt_table < 50] <- "other"
+fData(sce)$short_gene_type <- plyr::mapvalues(fData(sce)$gene_type,
+                                             from = names(gt_table),
+                                             to = new_gt_names)
+sce <- sce[fData(sce)$n_cells_exprs > 0, ]
+```
+
+Remove missing status:
+
+```{r remove-na}
+to_keep <- !(is.na(sce$ER_status) | is.na(sce$PR_status))
+sce <- sce[, to_keep]
+```
+
+Construct a gene level SCESet:
+
+```{r to-gene-level}
+sce_gene <- summariseExprsAcrossFeatures(sce,
+                                               summarise_by = "ensembl_gene_id")
+```
+
+Download relevant data:
+
+```{r download-data}
+fData(sce_gene)$ensembl_gene_id <- fData(sce_gene)$exprs_collapsed_to
+
+fData(sce_gene)$ensembl_gene_id <- gsub(fData(sce_gene)$ensembl_gene_id, pattern = "\\.[0-9]+", replacement = "")
+
+ensembl_gene_id <- fData(sce_gene)$ensembl_gene_id
+
+annotation_file <- "../../data/BRCA/gene_annotations.csv"
+
+if(file.exists(annotation_file)) { # do nothing
+  gene_annos <- read_csv(annotation_file)
+} else if(has_internet()) {
+  mart <- useMart(biomart = 'ensembl', 
+          dataset = 'hsapiens_gene_ensembl')
+  gene_annos <- getBM(mart = mart, 
+                         filters = "ensembl_gene_id",
+                         attributes = c("ensembl_gene_id",
+                                        "hgnc_symbol",
+                                        "transcript_biotype"),
+              values = ensembl_gene_id)
+
+  write_csv(gene_annos, annotation_file)
+} else {
+  stop("Annotation file missing and ")
+}
+
+mm <- match(ensembl_gene_id, gene_annos$ensembl_gene_id)
+non_na_mm <- which(!is.na(mm))
+mm <- mm[non_na_mm]
+
+gene_annos <- gene_annos[mm, ]
+sce_gene <- sce_gene[non_na_mm, ]
+
+
+## Now add them in to the fData
+stopifnot(all.equal(fData(sce_gene)$ensembl_gene_id,
+                    gene_annos$ensembl_gene_id))
+
+for(nn in names(gene_annos)) {
+  fData(sce_gene)[[nn]] <- gene_annos[[nn]]
+}
+
+featureNames(sce_gene) <- paste0(fData(sce_gene)$hgnc_symbol, "_", fData(sce_gene)$ensembl_gene_id)
+
+```
+
+```{r add-meta}
+pseudogenes <- grepl("pseudogene", fData(sce_gene)$transcript_biotype)
+not_pseudogene <- which(!pseudogenes)
+
+sce_gene <- sce_gene[not_pseudogene, ]
+sce_gene <- calculateQCMetrics(sce_gene)
+```
+
+Select high variance genes:
+
+```{r select-high-variance}
+var_exprs <- matrixStats::rowVars(exprs(sce_gene))
+
+to_use <- var_exprs > 0.5 
+
+sce <- sce_gene[to_use, ]
+```
+
+
+And save the result:
+
+```{r save-tumour-gene}
+saveRDS(sce, file = "../../data/BRCA/sce_brca_clvm.rds")
+saveRDS(sce_gene, file = "../../data/BRCA/sce_brca_gene_level.rds")
+```
