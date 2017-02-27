@@ -80,8 +80,8 @@ rownames(brca_clinical_pd) <- brca_clinical_pd$CGHubAnalysisID
 sce <- newSCESet(countData = as.matrix(brca_counts),
                  phenoData = AnnotatedDataFrame(brca_clinical_pd))
 exprs(sce) <- log2(as.matrix(brca) + 1)
+tpm(sce) <- as.matrix(brca)
 
-# sce <- sce[, sce$centre != 31] # get rid of the crappy centre
 
 fData(sce)$gene_type <- gene_type
 fData(sce)$ensembl_gene_id <- ensembl_gene_id
