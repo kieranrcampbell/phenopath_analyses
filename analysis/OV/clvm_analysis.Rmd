@@ -1,0 +1,243 @@
+---
+title: "Immune-mutational burden interactions in ovarian cancer using Variational Bayes Phenotime"
+author: "Kieran Campbell"
+date: "February 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE, fig.width = 6, fig.height = 4)
+
+library(scater)
+library(tidyverse)
+library(magrittr)
+library(matrixStats)
+library(ggrepel)
+library(cowplot)
+library(viridis)
+library(splines)
+library(DT)
+library(edgeR)
+library(limma)
+library(gplots)
+library(RColorBrewer)
+library(clvm)
+
+set.seed(123L)
+
+scale_vec <- function(x) (x - mean(x)) / sd(x)
+
+```
+
+# Load data
+
+Load results:
+
+```{r load-all-data}
+pcavi <- readRDS("../../data/OV/clvm_results.rds")
+sce <- readRDS("../../data/OV/sce_ov_clvm.rds")
+
+x <- sce$x
+```
+
+# Exploring phenotime results
+
+## Comparison to PC1
+
+```{r pseudotime-vs-pc1}
+pc1 <- prcomp(t(exprs(sce)), scale = TRUE)$x[,1]
+
+qplot(scale_vec(pc1), scale_vec(pcavi$m_t), color = x) +
+  scale_color_viridis(name = "Scaled mutational burden") +
+  stat_function(fun = function(x) x, color = 'black') + 
+  xlab("PC1") + ylab(expression(z))
+```
+
+## Identifying significant genes
+
+In the context of CAVI we have modelled each interaction coefficient by an approximating distribution of the form
+
+$$ \beta_{pg} \sim \text{Normal}(m_{\beta_{pg}}, s_{\beta_{pg}}^2) $$
+We define a _significant_ interaction if the $2 \sigma$ posterior doesn't cross zero, ie
+
+$$ m_{\beta_{pg}} - n s_{\beta_{pg}} > 0 $$
+or
+$$ m_{\beta_{pg}} + n s_{\beta_{pg}} < 0 $$
+
+Here we use $n=3$:
+
+```{r beta-df}
+df_beta <- data_frame(
+  c = pcavi$m_c,
+  beta = pcavi$m_beta[1,],
+  chi = pcavi$chi_exp[1,],
+  alpha = pcavi$m_alpha[1,],
+  gene = featureNames(sce),
+  is_sig = significant_interactions(pcavi, n = 3)
+)
+```
+
+This gives:
+
+```{r how-many-sig}
+sum(df_beta$is_sig)
+```
+
+_significant_ interactions.
+
+We can plot these:
+
+```{r plot-sigs}
+chi_cutoff <- 0.4
+df_beta <- mutate(df_beta, 
+                  gene_symbol = sapply(strsplit(gene, "_"), `[`, 1))
+
+is_na <- df_beta$gene_symbol == "NA"
+df_beta$gene_symbol[is_na] <- df_beta$gene[is_na]
+
+ggplot(df_beta, aes(x = beta, y = 1 / chi, color = is_sig)) + 
+  geom_point(alpha = 0.8) +
+  # geom_point(data = dplyr::filter(df_beta, is_mmr), alpha = 0.6) +
+  scale_color_brewer(palette = "Set1", name = "'Significant'") +
+  geom_label_repel(data = dplyr::filter(df_beta, 1 / chi > chi_cutoff), aes(label = gene_symbol)) +
+  xlab(expression(beta)) +
+  ylab(expression(paste("[", chi, "]"^-1)))
+  
+```
+
+Which genes are sig?
+
+```{r dt-sig}
+filter(df_beta, is_sig) %>% arrange(desc(abs(beta))) %>% 
+  select(gene, beta, alpha) %>% 
+  datatable()
+```
+
+We can plot expression along phenotime for the 35 _significant_ genes:
+
+```{r exprs-along-pst, fig.width = 12, fig.height = 9}
+tmap <- pcavi$m_t
+
+
+top_genes <- dplyr::filter(df_beta, is_sig) %>% 
+  arrange(desc(abs(beta))) %>% 
+  extract2("gene") # %>% head(n=20)
+
+t(exprs(sce))[, top_genes] %>% 
+  as_data_frame() %>% 
+  dplyr::mutate(phenotime = tmap, x = x) %>% 
+  gather(gene, expression, -phenotime, -x) %>% 
+  ggplot(aes(x = phenotime, y = expression, color = x)) + geom_point(alpha = 0.4) +
+  facet_wrap(~ gene, scales = "free_y") + 
+  scale_color_viridis() +
+  theme(legend.position = "top", strip.text.x = element_text(size = 9))# +
+  # stat_smooth(se = FALSE, method = "lm", size = 2, formula = y ~ ns(x,3))
+```
+
+
+What is phenotime? Check the immune response genes:
+
+```{r immune-resp, fig.width = 7}
+immune_genes <- c("FOXP3", "CD4", "IL2RB")
+immune_inds <- match(immune_genes, fData(sce)$hgnc_symbol)
+
+t(exprs(sce))[, immune_inds, drop=FALSE] %>% 
+  as_data_frame() %>% 
+  dplyr::mutate(phenotime = tmap, x = x) %>% 
+  gather(gene, expression, -phenotime, -x) %>% 
+  ggplot(aes(x = phenotime, y = expression, color = x)) + geom_point(alpha = 0.4) +
+  facet_wrap(~ gene, scales = "free_y") + 
+  scale_color_viridis(name = "scaled mutational burden") +
+  theme(legend.position = "top", strip.text.x = element_text(size = 9)) +
+  stat_smooth(se = FALSE, method = "lm", size = 1, color = 'black', formula = y ~ ns(x,3))
+```
+
+Nice immune response plot:
+
+```{r nice-immune-response}
+df_immune <- t(exprs(sce))[, immune_inds, drop=FALSE] %>% 
+  as_data_frame() %>% 
+  dplyr::mutate(phenotime = tmap, x = x) %>% 
+  gather(gene, expression, -phenotime, -x)
+
+df_immune <- mutate(df_immune, 
+                  gene_symbol = sapply(strsplit(gene, "_"), `[`, 1))
+
+ggplot(df_immune, aes(x = phenotime, y = expression, color = gene_symbol)) + 
+  geom_point(alpha = 0.4) +
+  facet_wrap(~ gene_symbol, scales = "free_y") + 
+  scale_color_brewer(palette = "Set1", name = "Gene") +
+  theme(legend.position = "none", strip.text.x = element_text(size = 9)) +
+  stat_smooth(se = FALSE, method = "lm", size = 2, formula = y ~ ns(x,3)) +
+  ylab(expression(paste("Expression log"[2], "(TPM+1)"))) +
+  xlab(expression(z))
+
+```
+
+
+
+
+
+# Differential expression comparison
+
+
+```{r limma}
+# retained_fnames <- rownames(sc_tumour[rowSums(counts(sc_tumour)) > 20, ])
+dge <- DGEList(counts(sce))
+dge <- calcNormFactors(dge)
+
+design <- model.matrix(~ x, pData(sce))
+v <- voom(dge, design, plot = TRUE)
+
+fit <- lmFit(v, design)
+fit <- eBayes(fit)
+results <- decideTests(fit)
+# vennDiagram(results)
+```
+
+And merge the results with phenotime:
+
+```{r merge-with-us}
+int_df_limma <- dplyr::rename(df_beta, feature = gene)
+
+df_limma <- data_frame(coef = fit$coefficients[,2], 
+                       pval = fit$p.value[,2],
+                       mu = pcavi$m_mu,
+                       feature = featureNames(sce)) %>% 
+  left_join(int_df_limma, by = "feature") %>% 
+  dplyr::mutate(log10pval = -log10(pval)) 
+```
+
+Then we can compare in several ways. Firstly, are the $\alpha$ values consistent with the limma voom reported coefficients?
+
+```{r compare-limma-alpha}
+ggplot(df_limma, aes(x = coef, y = alpha)) + 
+  geom_point(alpha = 0.5) +
+  xlab("Limma voom coefficient") + ylab(expression(paste("Phenotime ", alpha)))
+
+ggplot(df_limma, aes(x = coef, y = alpha, color = abs(mu))) + 
+  geom_point(alpha = 0.5) +
+  xlab("Limma voom coefficient") + 
+  ylab(expression(paste("Phenotime ", alpha))) +
+  scale_color_viridis()
+```
+
+There is some "twisting" there which may be due to using a mixed effects model rather than straight forward DE.
+
+Is there any relationship between the limma voom reported coefficients and phenotimes $\beta$ values?
+
+```{r compare-beta}
+ggplot(df_limma, aes(x = coef, y = beta)) + geom_point(alpha = 0.5) +
+  xlab("Limma voom coefficient") + ylab(expression(paste("Phenotime ", beta)))
+```
+
+So no obvious correlations. Let's just double check the $p$-values:
+
+```{r limma-pval}
+ggplot(df_limma, aes(x = beta, y = log10pval)) + geom_point(alpha = 0.5) +
+  ylab("Limma voom -log10 pval") + xlab(expression(paste("Phenotime ", beta)))
+```
+
+Again no obvious relationship.
+
+

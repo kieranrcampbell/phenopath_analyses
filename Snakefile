@@ -83,3 +83,14 @@ rule ov_clvm:
         "data/OV/clvm_results.rds"
     shell:
         "Rscript scripts/run_cavi.R {input} {output}"
+
+## ---- BRCA ----
+
+rule construct_sceov:
+    input:
+        "data/BRCA/TCGA_BRCA_tpm.tsv.gz",
+        "data/BRCA/TCGA_BRCA_counts.tsv.gz"
+    output:
+        "data/BRCA/sce_brca.rds"
+    shell:
+        "Rscript {R_opts} scripts/BRCA/0_brca_to_sceset.R"
