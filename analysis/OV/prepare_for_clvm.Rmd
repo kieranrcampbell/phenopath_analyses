@@ -22,8 +22,8 @@ scale_vec <- function(x) (x - mean(x)) / sd(x)
 ```{r data-prep, cache = FALSE}
 sce <- readRDS("../../data/OV/sce_ov.rds")
 sampleNames(sce) <- sampleNames(assayData(sce))
-sce <- sce[matrixStats::rowVars(tpm(sce)) > 0, ]
-is_exprs(sce) <- tpm(sce) > 0
+sce <- sce[matrixStats::rowVars(exprs(sce)) > 0, ]
+is_exprs(sce) <- exprs(sce) > 0
 sce <- calculateQCMetrics(sce)
 
 hgnc_symbols <- sapply(strsplit(featureNames(sce), "_"), `[`, 2)

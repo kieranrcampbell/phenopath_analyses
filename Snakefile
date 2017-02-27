@@ -80,6 +80,6 @@ rule ov_clvm:
     input:
         "data/OV/sce_ov_clvm.rds"
     output:
-        "data/OV/ov_results.rds"
+        "data/OV/clvm_results.rds"
     shell:
         "Rscript scripts/run_cavi.R {input} {output}"

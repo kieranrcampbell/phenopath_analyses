@@ -80,6 +80,7 @@ rownames(ov_clinical_pd) <- ov_clinical_pd$CGHubAnalysisID
 
 sce <- newSCESet(countData = as.matrix(ov_counts),
                  phenoData = AnnotatedDataFrame(ov_clinical_pd))
+tpm(sce) <- as.matrix(ov)
 exprs(sce) <- log2(as.matrix(ov) + 1)
 
 # sce <- sce[, sce$centre != 31] # get rid of the crappy centre
