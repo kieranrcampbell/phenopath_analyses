@@ -55,7 +55,7 @@ Construct a gene level SCESet:
 
 ```{r to-gene-level}
 sce_gene <- summariseExprsAcrossFeatures(sce,
-                                               summarise_by = "ensembl_gene_id")
+                              summarise_by = "ensembl_gene_id")
 ```
 
 Download relevant data:
@@ -114,15 +114,23 @@ sce_gene <- sce_gene[not_pseudogene, ]
 sce_gene <- calculateQCMetrics(sce_gene)
 ```
 
+Make x:
+
+```{r make-x}
+sce_gene$x <- scale_vec(1 * (sce_gene$ER_status  == 'positive'))
+```
+
 Select high variance genes:
 
 ```{r select-high-variance}
 var_exprs <- matrixStats::rowVars(exprs(sce_gene))
 
-to_use <- var_exprs > 0.5 
+to_use <- var_exprs > 0.9
 
 sce <- sce_gene[to_use, ]
 ```
+
+
 
 
 And save the result:
