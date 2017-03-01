@@ -19,7 +19,9 @@ rule all:
         "data/OV/sce_ov.rds",
         "data/OV/sce_ov_clvm.rds",
         "data/OV/clvm_results.rds",
-	"data/BRCA/sce_brca.rds"
+	"data/BRCA/sce_brca.rds",
+        "data/BRCA/sce_brca_clvm.rds", "data/BRCA/sce_brca_gene_level.rds",
+        "data/BRCA/clvm_results.rds"
 
 
 ## ------ COAD -----
@@ -104,3 +106,12 @@ rule prepare_brca:
         "data/BRCA/sce_brca_gene_level.rds"
     shell:
         "Rscript -e \"rmarkdown::render('analysis/BRCA/prepare_for_clvm.Rmd')\""
+
+
+rule brca_clvm:
+    input:
+        "data/BRCA/sce_brca_clvm.rds"
+    output:
+        "data/BRCA/clvm_results.rds"
+    shell:
+        "Rscript scripts/run_cavi.R {input} {output}"
