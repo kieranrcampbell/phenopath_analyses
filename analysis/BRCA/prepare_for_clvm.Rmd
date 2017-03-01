@@ -124,6 +124,33 @@ to_use <- var_exprs > 0.5
 sce <- sce_gene[to_use, ]
 ```
 
+We need some QC to remove outlier cells:
+
+```{r qc}
+sce <- plotPCA(sce, ntop = nrow(sce), return_SCESet = TRUE)
+
+set.seed(123L)
+mc <- Mclust(redDim(sce)[,c(1,3)], G = 2)
+sce$cluster <- mc$classification
+
+plotReducedDim(sce, colour_by = 'cluster', ncomponents = 3)
+
+to_keep_index <- which.max(table(sce$cluster))
+samples_to_keep <- which(sce$cluster == to_keep_index)
+
+sce <- sce[, samples_to_keep]
+sce_gene <- sce_gene[, samples_to_keep]
+```
+
+Finally let's remove samples with indeterminate ER or PR status:
+
+```{r remove-indeterminate}
+status_defined <- sce$ER_status != 'indeterminate' &
+  sce$PR_status != 'indeterminate'
+
+sce <- sce[, status_defined]
+sce_gene <- sce_gene[, status_defined]
+```
 
 And save the result:
 
