@@ -1,1 +1,1 @@
-cluster logs
+logs

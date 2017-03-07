@@ -21,7 +21,8 @@ rule all:
         "data/OV/clvm_results.rds",
 	"data/BRCA/sce_brca.rds",
         "data/BRCA/sce_brca_clvm.rds", "data/BRCA/sce_brca_gene_level.rds",
-        "data/BRCA/clvm_results.rds"
+        "data/BRCA/clvm_results.rds",
+        "data/BRCA/expressed_genes.csv"
 
 
 ## ------ COAD -----
@@ -115,3 +116,11 @@ rule brca_clvm:
         "data/BRCA/clvm_results.rds"
     shell:
         "Rscript scripts/run_cavi.R {input} {output}"
+
+rule brca_expressed_genes:
+    input:
+        "data/BRCA/sce_brca_gene_level.rds"
+    output:
+        "data/BRCA/expressed_genes.csv"
+    shell:
+        "Rscript scripts/find_expressed_genes.R {input} {output}"
