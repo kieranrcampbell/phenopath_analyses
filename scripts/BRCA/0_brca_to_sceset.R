@@ -89,22 +89,47 @@ fData(sce)$ensembl_gene_id <- ensembl_gene_id
 
 
 # Somatic Mutations -------------------------------------------------------
-# to_patient_barcode <- function(bcr_barcode) {
-#   tolower(paste0(strsplit(bcr_barcode, "-")[[1]][1:3], collapse = "-"))
-# }
-# 
-# patient_mutations <- BRCA.mutations %>% 
-#   filter(bcr_patient_barcode != "bcr_patient_barcode") %>% # I mean come on
-#   group_by(bcr_patient_barcode) %>% 
-#   summarise(n_mutations = n(), n_somatic = sum(Mutation_Status == "Somatic"),
-#             n_unknown = sum(Mutation_Status == "Unknown")) %>% 
-#   mutate(patient_barcode = sapply(bcr_patient_barcode, to_patient_barcode))
-# 
-# pdata_df <- select(pData(sce), patient_barcode)
-# pdata_df <- left_join(pdata_df, patient_mutations, by = "patient_barcode")
-# 
-# stopifnot(all.equal(sce$patient_barcode, pdata_df$patient_barcode))
-# 
-# pData(sce) <- cbind(pData(sce), select(pdata_df, n_mutations, n_somatic, n_unknown))
+to_patient_barcode <- function(bcr_barcode) {
+  tolower(paste0(strsplit(bcr_barcode, "-")[[1]][1:3], collapse = "-"))
+}
+
+patient_mutations <- BRCA.mutations %>%
+  filter(bcr_patient_barcode != "bcr_patient_barcode") %>% # I mean come on
+  group_by(bcr_patient_barcode) %>%
+  summarise(n_mutations = n(), n_somatic = sum(Mutation_Status == "Somatic"),
+            n_unknown = sum(Mutation_Status == "Unknown")) %>%
+  mutate(patient_barcode = sapply(bcr_patient_barcode, to_patient_barcode))
+
+patient_mutations <- filter(patient_mutations, 
+                            patient_barcode %in% sce$patient_barcode)
+
+## end
+
+pdata_df <- dplyr::select(pData(sce), patient_barcode)
+pdata_df <- left_join(pdata_df, patient_mutations, by = "patient_barcode")
+
+mm <- match(sce$patient_barcode, pdata_df$patient_barcode)
+pdata_df <- pdata_df[mm, ]
+
+stopifnot(all.equal(sce$patient_barcode, pdata_df$patient_barcode))
+
+pData(sce) <- cbind(pData(sce), dplyr::select(pdata_df, n_mutations, n_somatic, n_unknown))
+
+
+# Add in phenotypic data --------------------------------------------------
+
+library(readxl)
+xl <- read_excel("../../data/BRCA/supplementary.xls", skip = 1)
+xl$patient_barcode <- tolower(xl$`Complete TCGA ID`)
+names(xl) <- sapply(names(xl), function(n) gsub(" ", "_", n))
+xl <- dplyr::select(xl, patient_barcode, HER2_Final_Status,
+                    Tumor, Node, Metastasis, AJCC_Stage, PAM50_mRNA, 
+                    RPPA_Clusters, Days_to_date_of_Death)
+
+pdata_df <- pData(sce)
+pd <- left_join(pdata_df, xl, by = "patient_barcode")
+
+stopifnot(all.equal(sce$patient_barcode, pd$patient_barcode))
+pData(sce) <- pd
 
 saveRDS(sce, file = "data/BRCA/sce_brca.rds")

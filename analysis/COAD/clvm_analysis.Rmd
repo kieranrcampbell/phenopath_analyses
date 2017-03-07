@@ -274,4 +274,13 @@ ggplot(df_limma, aes(x = beta_msi, y = msi_log10pval)) + geom_point(alpha = 0.5)
 
 Again no obvious relationship.
 
+# Crossover bit for chris
+
+```{r df-beta}
+df_beta <- mutate(df_beta,
+                  crossover = - alpha_msi / beta_msi)
+
+filter(df_beta, is_sig) %>% 
+  ggplot(aes(x = crossover)) + geom_histogram()
+```
 
