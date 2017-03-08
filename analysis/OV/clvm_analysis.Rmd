@@ -73,7 +73,8 @@ df_beta <- data_frame(
   chi = pcavi$chi_exp[1,],
   alpha = pcavi$m_alpha[1,],
   gene = featureNames(sce),
-  is_sig = significant_interactions(pcavi, n = 3)
+  is_sig = significant_interactions(pcavi, n = 3),
+  hgnc_symbol = fData(sce)$hgnc_symbol
 )
 ```
 
@@ -248,4 +249,44 @@ df_beta <- mutate(df_beta,
 
 filter(df_beta, abs(crossover) < 5) %>% 
   ggplot(aes(x = crossover)) + geom_histogram()
+```
+
+# Better visualisation of genes
+
+
+```{r better-vis}
+tmap <- pcavi$m_t
+
+top_genes <- dplyr::filter(df_beta, is_sig) %>% 
+  arrange(desc(abs(beta))) %>% 
+  extract2("gene") # %>% head(n=20)
+
+top_gene <- top_genes[7]
+
+gex_df <- t(exprs(sce))[, top_gene] %>% 
+  as_data_frame() %>% 
+  dplyr::mutate(phenotime = tmap, x = x) %>% 
+  gather(gene, expression, -phenotime, -x)
+
+gex_df <- mutate(gex_df, x_cut = cut(x, 3))
+
+ggplot(gex_df, aes(x = phenotime, y = expression, color = x_cut)) + 
+  geom_point(alpha = 0.4) +
+  facet_wrap(~ x_cut, scales = "free_y") + 
+  scale_color_brewer(palette = "Set1", name = "Scaled mutational burden") +
+  theme(legend.position = "top", strip.text.x = element_text(size = 9)) +
+  stat_smooth(se = F, method = 'lm')
+```
+
+
+More visualisaton:
+
+```{r more-vis}
+
+ggplot(df_beta, aes(x = c, y = beta, color = is_sig)) + geom_point() +
+  scale_color_brewer(palette = "BuPu") +
+  geom_text_repel(data = filter(df_beta, is_sig),
+                  aes(label = hgnc_symbol), color = 'black', 
+                  size = 2)
+
 ```

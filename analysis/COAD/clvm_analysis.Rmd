@@ -74,8 +74,15 @@ df_beta <- data_frame(
   alpha_msi = pcavi$m_alpha[1,],
   gene = featureNames(sce),
   is_mmr = fData(sce)$is_mmr,
-  is_sig = significant_interactions(pcavi, n = 3)
+  is_sig = significant_interactions(pcavi, n = 3),
+  hgnc_symbol = fData(sce)$hgnc_symbol,
+  ensembl_gene_id = fData(sce)$ensembl_gene_id
 )
+
+
+df_beta$is_sig_graph <- 
+  plyr::mapvalues(df_beta$is_sig, from = c(FALSE, TRUE),
+                  to = c("Non-significant", "Significant"))
 ```
 
 This gives:
@@ -183,31 +190,45 @@ Look at MLH1 in more detail:
 ```{r mlh1}
 mlh1 <- c("MLH1")
 
-mlh1_ind <- match(mlh1, fData(sce)$hgnc_symbol)
+make_gene_plot <- function(genes) {
+  inds <- match(genes, fData(sce)$hgnc_symbol)
+  
+  df <- t(exprs(sce))[, ind, drop=FALSE] 
+  colnames(df) <- fData(sce)$hgnc_symbol[inds]
+  
+  df <- as_data_frame(df) %>% 
+    dplyr::mutate(phenotime = tmap, x = as.character(x)) %>% 
+    gather(gene, expression, -phenotime, -x)
+  
+  df$x[is.na(df$x)] <- "NA"
+  df$x <- plyr::mapvalues(df$x, from = sort(unique(df$x)), to = c("MSI-low", "MSI-high"))
+  
+  df$x <- factor(df$x, levels = c("MSI-low", "MSI-high"))
+  
+  df_nox <- dplyr::select(df, -x)
+  
+  ggplot(df, aes(x = phenotime, y = expression, fill = x, color = x)) + 
+    geom_point(data = df_nox, color = "grey80", fill = "grey80") +
+    geom_point(shape = 21, color = 'grey30', alpha = 0.7) +
+    facet_grid(gene ~ x, scales = "free") + 
+    scale_fill_brewer(palette = "Set1", name = "MSI") +
+    scale_color_brewer(palette = "Set1", name = "MSI") +
+    theme(legend.position = "none", strip.text = element_text(size = 9),
+          strip.background = element_rect(colour = "black", fill = "grey95", 
+                                          size = 0.5, linetype = 1)) +
+  theme(axis.text = element_text(size = 9),
+        axis.title = element_text(size = 10)) +
+    stat_smooth(se = FALSE, method = "lm", size = 1.5, formula = y ~ ns(x,3),
+                color = 'grey30') +
+    ylab(expression(Expression ~ log[2] ~ "(TPM + 1)")) + 
+    xlab("z (immune response)")
+}
 
-df_mlh1 <- t(exprs(sce))[, mlh1_ind, drop=FALSE] %>% 
-  as_data_frame() %>% 
-  dplyr::mutate(phenotime = tmap, x = as.character(x)) %>% 
-  gather(gene, expression, -phenotime, -x)
+genes <- c("MLH1", "TGFBR2")
 
-df_mlh1$x[is.na(df_mlh1$x)] <- "NA"
-df_mlh1$x <- plyr::mapvalues(df_mlh1$x, from = sort(unique(df_mlh1$x)), to = c("MSI-low", "MSI-high"))
+make_gene_plot(genes)
 
-df_mlh1$x <- factor(df_mlh1$x, levels = c("MSI-low", "MSI-high"))
-
-df_mlh1_nox <- dplyr::select(df_mlh1, -x)
-
-ggplot(df_mlh1, aes(x = phenotime, y = expression, color = x)) + 
-  geom_point(data = df_mlh1_nox, color = "grey70") +
-  geom_point() +
-  facet_wrap(~ x, scales = "free_y") + 
-  scale_color_brewer(palette = "Set1", name = "MSI") +
-  theme(legend.position = "none", strip.text.x = element_text(size = 9)) +
-  stat_smooth(se = FALSE, method = "lm", size = 1.5, formula = y ~ ns(x,3)) +
-  ggtitle("MLH1 expression") +
-  ylab(expression(paste("Expression log"[2], "(TPM+1)"))) +
-  xlab("z (immune response)")
-
+gene_plot <- last_plot()
 ```
 
 # Differential expression comparison
@@ -234,12 +255,15 @@ And merge the results with phenotime:
 ```{r merge-with-us}
 int_df_limma <- dplyr::rename(df_beta, feature = gene)
 
+qvals <- p.adjust(fit$p.value[,2], method = 'BH')
+
 df_limma <- data_frame(msi_coef = fit$coefficients[,2], 
-                       msi_pval = fit$p.value[,2],
+                       msi_qval = qvals,
                        mu = pcavi$m_mu,
                        feature = featureNames(sce)) %>% 
   left_join(int_df_limma, by = "feature") %>% 
-  dplyr::mutate(msi_log10pval = -log10(msi_pval)) 
+  dplyr::mutate(msi_log10qval = -log10(msi_qval),
+                limma_sig = msi_qval < 0.05) 
 ```
 
 Then we can compare in several ways. Firstly, are the $\alpha$ values consistent with the limma voom reported coefficients?
@@ -261,8 +285,20 @@ There is some "twisting" there which may be due to using a mixed effects model r
 Is there any relationship between the limma voom reported coefficients and phenotimes $\beta$ values?
 
 ```{r compare-beta}
-ggplot(df_limma, aes(x = msi_coef, y = beta_msi)) + geom_point(alpha = 0.5) +
-  xlab("Limma voom coefficient") + ylab(expression(paste("Phenotime ", beta)))
+
+ggplot(df_limma, x =-log10(msi_qval), aes(x = beta_msi, y =-log10(msi_qval), color = is_sig_graph)) + 
+  geom_point(alpha = 0.8) +
+  ylab(expression(paste("Limma voom -", log[10], "(q-value)"))) + 
+  xlab(expression(paste("PhenoPath ", beta))) +
+  scale_color_brewer(palette = "Set2", name = "Interaction") +
+  # theme(legend.position = 'top') +
+  geom_hline(yintercept = -log10(0.05), linetype = 2, alpha = 0.5) +
+  theme(axis.text = element_text(size = 8),
+        axis.title = element_text(size = 9)) +
+  theme(legend.title = element_text(size = 10),
+        legend.text = element_text(size = 9)) 
+
+limma_plot <- last_plot()
 ```
 
 So no obvious correlations. Let's just double check the $p$-values:
@@ -282,5 +318,121 @@ df_beta <- mutate(df_beta,
 
 filter(df_beta, is_sig) %>% 
   ggplot(aes(x = crossover)) + geom_histogram()
+```
+
+
+
+```{r more-vis}
+textinfo <- frame_data(
+  ~x, ~y, ~label,
+  1.1, 0.15, "Gene upregulated\nMSI increases upregulation",
+  1.1, -0.15, "Gene upregulated\nMSI decreases upregulation",
+  -1.2, 0.15, "Gene downregulated\nMSI decreases downregulation",
+  -1.2, -0.15, "Gene downregulated\nMSI increases downregulation"
+)
+
+
+
+ggplot(df_beta, aes(x = c, y = beta_msi, color = is_sig_graph)) + 
+  geom_point() +
+  geom_vline(xintercept = 0, linetype = 2, alpha = 0.5) +
+  geom_hline(yintercept = 0, linetype = 2, alpha = 0.5) +
+  scale_color_brewer(palette = "Set2", name = "Interaction") +
+  geom_text_repel(data = filter(df_beta, is_sig),
+                  aes(label = hgnc_symbol), color = 'black', 
+                  size = 2.5) +
+  ylab(expression(beta)) +
+  theme(legend.position = 'top',
+        axis.text = element_text(size = 10),
+        axis.title = element_text(size = 11),
+        legend.title = element_text(size = 11),
+        legend.text = element_text(size = 10)) +
+  geom_text(data = textinfo, aes(x = x, y = y, label = label), 
+            color = 'black', size = 3)
+
+lplot <- last_plot()
+lplot
+```
+
+# What is pseudotime (2)
+
+
+```{r get-correlations}
+genome <- "hg19"
+id <- "ensGene"
+
+all_genes <- fData(sce)$ensembl_gene_id
+
+cs <- apply(exprs(sce), 1, cor, tmap)
+cdf <- data_frame(feature = all_genes, correlation = cs)
+
+upreg_genes <- filter(cdf, correlation > 0.5) %>% extract2("feature") 
+downreg_genes <- filter(cdf, correlation < -0.5) %>% extract2("feature")
+
+upg <- 1 * (all_genes %in% upreg_genes)
+downg <- 1 * (all_genes %in% downreg_genes)
+
+names(upg) <- names(downg) <- all_genes
+
+pwfup <- nullp(upg, genome, id)
+goup <- goseq(pwfup, genome, id, test.cats = "GO:BP")
+
+pwfdown <- nullp(downg, genome, id)
+godown <- goseq(pwfdown, genome, id, test.cats = "GO:BP")
+```
+
+Graph results:
+
+```{r graph-res}
+parse_go <- function(go, type, n_tested) {
+  go <- go %>% 
+    mutate(qval = p.adjust(over_represented_pvalue)) %>% 
+    mutate(log10qval = -log10(qval),
+           prop_in_cat = numInCat / n_tested) %>% 
+    head(n = 12) %>% 
+    mutate(type = type) %>% 
+    tbl_df() %>% 
+    arrange(desc(log10qval))
+  go
+}
+
+gos <- bind_rows(
+  parse_go(goup, "Up-regulated", length(upreg_genes)),
+  parse_go(godown, "Down-regulated", length(downreg_genes))
+)
+
+gos$term <- factor(gos$term, levels = gos$term[order(gos$log10qval)])
+
+gos <- mutate(gos, prop_cat = numDEInCat / numInCat)
+
+filter(gos, type == "Up-regulated") %>% 
+  ggplot(aes(x = term, y = log10qval)) + #, size = 100 * prop_cat)) +
+    geom_point() +
+    coord_flip() +
+    theme(axis.title.y = element_blank()) +
+    ylab(expression(paste("-", log[10], " q-value"))) +
+  scale_size(name = "% category\nrepresented") +
+    theme(#legend.position = c(-.2, -.14), legend.direction = "horizontal",
+      legend.position = c(0, 0), legend.direction = "horizontal",
+        axis.text = element_text(size = 8),
+        axis.title = element_text(size = 10),
+        legend.title = element_text(size = 11),
+        legend.text = element_text(size = 10)) 
+
+goplot <- last_plot()
+```
+
+
+```{r large-plot}
+lsize <- 11
+bottom_left <- plot_grid(goplot, 
+                         plot_grid(NULL, limma_plot, nrow = 1, rel_widths = c(1,8)), 
+                         ncol = 1, labels = c("B", "C"),
+                         label_size = lsize)
+bottom_grid <- plot_grid(bottom_left, gene_plot, nrow = 1, labels = c("", "D"),
+                         label_size = lsize)
+
+plot_grid(lplot, bottom_grid, ncol = 1, rel_heights = c(2,1.5), labels = c("A",""),
+          label_size = lsize)
 ```
 
