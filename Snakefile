@@ -23,7 +23,9 @@ rule all:
         "data/BRCA/sce_brca_clvm.rds", "data/BRCA/sce_brca_gene_level.rds",
         "data/BRCA/clvm_results.rds",
         "data/BRCA/expressed_genes.csv",
-        "data/shalek/sce_shalek.rds"
+        "data/shalek/sce_shalek.rds",
+	"data/shalek/sce_shalek_clvm.rds",
+	"data/shalek/clvm_results.rds"
 
 
 ## ------ COAD -----
@@ -145,7 +147,7 @@ rule prepare_shalek:
     shell:
         "Rscript -e \"rmarkdown::render('analysis/shalek/prepare_for_clvm.Rmd')\""
 
-rule ov_clvm:
+rule shalek_clvm:
     input:
         "data/shalek/sce_shalek_clvm.rds"
     output:

@@ -50,5 +50,5 @@ sc$x <- scale_vec( sc$stimulant == "LPS" )
 And save the result:
 
 ```{r save-tumour-gene}
-saveRDS(sce, file = "../../data/shalek/sce_shalek_clvm.rds")
+saveRDS(sc, file = "../../data/shalek/sce_shalek_clvm.rds")
 ```

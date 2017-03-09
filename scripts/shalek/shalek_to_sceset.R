@@ -31,6 +31,8 @@ rownames(tpmdata) <- genes
 sce <- newSCESet(tpmData = tpmdata, 
                  phenoData = new("AnnotatedDataFrame", pdata))
 
+is_exprs(sce) <- exprs(sce) > 0
+
 sce <- calculateQCMetrics(sce)
 
 saveRDS(sce, file = "data/shalek/sce_shalek.rds")

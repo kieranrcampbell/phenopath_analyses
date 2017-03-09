@@ -27,6 +27,9 @@ sce <- readRDS(input_rds)
 y <- scale(t(exprs(sce)))
 x <- cbind(pData(sce)[[ cov_name ]])
 
+print(dim(y))
+print(dim(x))
+
 pcavi <- clvm(y, x)
 
 saveRDS(pcavi, file = output_file)
