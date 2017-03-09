@@ -286,17 +286,20 @@ Is there any relationship between the limma voom reported coefficients and pheno
 
 ```{r compare-beta}
 
+cols <- RColorBrewer::brewer.pal(3, "Set2")
+cols2 <- c("#c5e2d9", cols[2])
+
 ggplot(df_limma, x =-log10(msi_qval), aes(x = beta_msi, y =-log10(msi_qval), color = is_sig_graph)) + 
-  geom_point(alpha = 0.8) +
+  geom_point() +
   ylab(expression(paste("Limma voom -", log[10], "(q-value)"))) + 
   xlab(expression(paste("PhenoPath ", beta))) +
-  scale_color_brewer(palette = "Set2", name = "Interaction") +
   # theme(legend.position = 'top') +
   geom_hline(yintercept = -log10(0.05), linetype = 2, alpha = 0.5) +
   theme(axis.text = element_text(size = 8),
         axis.title = element_text(size = 9)) +
   theme(legend.title = element_text(size = 10),
-        legend.text = element_text(size = 9)) 
+        legend.text = element_text(size = 9)) +
+  scale_color_manual(values = cols2, name = "Interaction") 
 
 limma_plot <- last_plot()
 ```
@@ -331,13 +334,14 @@ textinfo <- frame_data(
   -1.2, -0.15, "Gene downregulated\nMSI increases downregulation"
 )
 
-
+cols <- RColorBrewer::brewer.pal(3, "Set2")
+cols2 <- c("#c5e2d9", cols[2])
 
 ggplot(df_beta, aes(x = c, y = beta_msi, color = is_sig_graph)) + 
   geom_point() +
   geom_vline(xintercept = 0, linetype = 2, alpha = 0.5) +
   geom_hline(yintercept = 0, linetype = 2, alpha = 0.5) +
-  scale_color_brewer(palette = "Set2", name = "Interaction") +
+  scale_color_manual(values = cols2, name = "Interaction") +
   geom_text_repel(data = filter(df_beta, is_sig),
                   aes(label = hgnc_symbol), color = 'black', 
                   size = 2.5) +

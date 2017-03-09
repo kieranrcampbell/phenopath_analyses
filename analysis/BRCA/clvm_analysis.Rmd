@@ -1,0 +1,605 @@
+---
+title: "BRCA using Variational Bayes Phenotime"
+author: "Kieran Campbell"
+date: "February 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE, fig.width = 6, fig.height = 4)
+
+library(scater)
+library(tidyverse)
+library(magrittr)
+library(matrixStats)
+library(ggrepel)
+library(cowplot)
+library(viridis)
+library(splines)
+library(DT)
+library(limma)
+library(RColorBrewer)
+library(reactome.db)
+library(clvm)
+library(biomaRt)
+library(goseq)
+
+set.seed(123L)
+
+scale_vec <- function(x) (x - mean(x)) / sd(x)
+
+```
+
+# Load data
+
+Load results:
+
+```{r load-all-data}
+pcavi <- readRDS("../../data/BRCA/clvm_results.rds")
+sce <- readRDS("../../data/BRCA/sce_brca_clvm.rds")
+
+x <- sce$x
+sce$tmap <- pcavi$m_t
+```
+
+# Exploring phenotime results
+
+## Comparison to PC1
+
+```{r pseudotime-vs-pc1}
+pc1 <- prcomp(t(exprs(sce)), scale = TRUE)$x[,1]
+
+qplot(scale_vec(pc1), scale_vec(pcavi$m_t), color = factor(x)) +
+  scale_color_brewer(palette = "Set1", name = "x") +
+  stat_function(fun = function(x) x, color = 'black') + 
+  xlab("PC1") + ylab(expression(z))
+```
+
+## Identifying significant genes
+
+In the context of CAVI we have modelled each interaction coefficient by an approximating distribution of the form
+
+$$ \beta_{pg} \sim \text{Normal}(m_{\beta_{pg}}, s_{\beta_{pg}}^2) $$
+We define a _significant_ interaction if the $2 \sigma$ posterior doesn't cross zero, ie
+
+$$ m_{\beta_{pg}} - n s_{\beta_{pg}} > 0 $$
+or
+$$ m_{\beta_{pg}} + n s_{\beta_{pg}} < 0 $$
+
+Here we use $n=3$:
+
+```{r beta-df}
+df_beta <- data_frame(
+  c = pcavi$m_c,
+  beta = pcavi$m_beta[1,],
+  chi = pcavi$chi_exp[1,],
+  alpha = pcavi$m_alpha[1,],
+  gene = featureNames(sce),
+  is_sig = significant_interactions(pcavi, n = 3),
+  hgnc_symbol = fData(sce)$hgnc_symbol,
+  ensembl_gene_id = fData(sce)$ensembl_gene_id
+)
+```
+
+This gives:
+
+```{r how-many-sig}
+print(sum(df_beta$is_sig))
+mean(df_beta$is_sig)
+```
+
+_significant_ interactions.
+
+We can plot these:
+
+```{r plot-sigs}
+chi_cutoff <- 1.45
+df_beta <- mutate(df_beta, 
+                  gene_symbol = sapply(strsplit(gene, "_"), `[`, 1))
+
+is_na <- df_beta$gene_symbol == "NA"
+df_beta$gene_symbol[is_na] <- df_beta$gene[is_na]
+
+ggplot(df_beta, aes(x = beta, y = 1 / chi, color = is_sig)) + 
+  geom_point(alpha = 0.8) +
+  # geom_point(data = dplyr::filter(df_beta, is_mmr), alpha = 0.6) +
+  scale_color_brewer(palette = "Set1", name = "'Significant'") +
+  geom_label_repel(data = dplyr::filter(df_beta, 1 / chi > chi_cutoff), aes(label = gene_symbol)) +
+  xlab(expression(beta)) +
+  ylab(expression(paste("[", chi, "]"^-1)))
+  
+```
+
+Which genes are sig?
+
+```{r dt-sig}
+filter(df_beta, is_sig) %>% arrange(desc(abs(beta))) %>% 
+  select(gene, beta, alpha) %>% 
+  datatable()
+```
+
+We can plot expression along phenotime for the 35 _significant_ genes:
+
+```{r exprs-along-pst, fig.width = 12, fig.height = 9}
+tmap <- pcavi$m_t
+sce$tmap <- tmap
+
+
+top_genes <- dplyr::filter(df_beta, is_sig) %>% 
+  arrange(desc(abs(beta))) %>% 
+  extract2("gene") %>% head(n=20)
+
+t(exprs(sce))[, top_genes] %>% 
+  as_data_frame() %>% 
+  dplyr::mutate(phenotime = tmap, x = factor(x)) %>% 
+  gather(gene, expression, -phenotime, -x) %>% 
+  ggplot(aes(x = phenotime, y = expression, color = x)) + geom_point(alpha = 0.4) +
+  facet_wrap(~ gene, scales = "free_y") + 
+  theme(legend.position = "top", strip.text.x = element_text(size = 9)) +
+  stat_smooth(se = FALSE, method = "lm", size = 2) + 
+  scale_color_brewer(name = "ER_status", palette = 'Set1')
+```
+
+
+Nice immune response plot:
+
+```{r nice-immune-response}
+df_immune <- t(exprs(sce))[, immune_inds, drop=FALSE] %>% 
+  as_data_frame() %>% 
+  dplyr::mutate(phenotime = tmap, x = x) %>% 
+  gather(gene, expression, -phenotime, -x)
+
+df_immune <- mutate(df_immune, 
+                  gene_symbol = sapply(strsplit(gene, "_"), `[`, 1))
+
+ggplot(df_immune, aes(x = phenotime, y = expression, color = gene_symbol)) + 
+  geom_point(alpha = 0.4) +
+  facet_wrap(~ gene_symbol, scales = "free_y") + 
+  scale_color_brewer(palette = "Set1", name = "Gene") +
+  theme(legend.position = "none", strip.text.x = element_text(size = 9)) +
+  stat_smooth(se = FALSE, method = "lm", size = 2, formula = y ~ ns(x,3)) +
+  ylab(expression(paste("Expression log"[2], "(TPM+1)"))) +
+  xlab(expression(z))
+
+```
+
+
+# Plot top genes
+
+```{r top-genes, fig.width = 7, fig.height=12}
+top_genes <- dplyr::filter(df_beta, is_sig) %>% 
+  arrange(desc(abs(beta))) %>% 
+  extract2("gene")
+
+top_genes <- top_genes[1:4]
+
+plot_nice_expression <- function(gene) {
+  df_gex <- t(exprs(sce))[, gene, drop=FALSE] %>% 
+    as_data_frame() %>% 
+    dplyr::mutate(phenotime = tmap, x = as.character(x)) %>% 
+    gather(gene, expression, -phenotime, -x)
+  
+  df_gex$x[is.na(df_gex$x)] <- "NA"
+  df_gex$x <- plyr::mapvalues(df_gex$x, from = sort(unique(df_gex$x)), to = c("ER negative", "ER positive"))
+  
+  df_gex$x <- factor(df_gex$x, levels = c("ER negative", "ER positive"))
+  
+  df_gex_nox <- dplyr::select(df_gex, -x)
+  
+  ggplot(df_gex, aes(x = phenotime, y = expression, color = x)) + 
+    geom_point(data = df_gex_nox, color = "grey70") +
+    geom_point() +
+    facet_wrap(~ x, scales = "free_y") + 
+    scale_color_brewer(palette = "Set1", name = "ER status") +
+    theme(legend.position = "none", strip.text.x = element_text(size = 9),
+          axis.title = element_text(size = 10),
+          axis.text = element_text(size = 9),
+          plot.title = element_text(size = 11)) +
+    stat_smooth(se = FALSE, method = "lm", size = 1.5, color = 'black') + # formula = y ~ ns(x,3), 
+    ggtitle(strsplit(gene, "_")[[1]][1]) +
+    ylab(expression(paste("Expression log"[2], "(TPM+1)"))) +
+    xlab("z")
+}
+
+plots <- lapply(top_genes, plot_nice_expression)
+
+plot_grid(plotlist = plots, ncol = 1)
+```
+
+# Differential expression comparison
+
+
+```{r limma}
+# retained_fnames <- rownames(sc_tumour[rowSums(counts(sc_tumour)) > 20, ])
+dge <- DGEList(counts(sce))
+dge <- calcNormFactors(dge)
+
+design <- model.matrix(~ x, pData(sce))
+v <- voom(dge, design, plot = TRUE)
+
+fit <- lmFit(v, design)
+fit <- eBayes(fit)
+results <- decideTests(fit)
+# vennDiagram(results)
+```
+
+And merge the results with phenotime:
+
+```{r merge-with-us}
+int_df_limma <- dplyr::rename(df_beta, feature = gene)
+
+df_limma <- data_frame(coef = fit$coefficients[,2], 
+                       pval = fit$p.value[,2],
+                       mu = pcavi$m_mu,
+                       feature = featureNames(sce)) %>% 
+  left_join(int_df_limma, by = "feature") %>% 
+  dplyr::mutate(log10pval = -log10(pval)) 
+```
+
+Then we can compare in several ways. Firstly, are the $\alpha$ values consistent with the limma voom reported coefficients?
+
+```{r compare-limma-alpha}
+ggplot(df_limma, aes(x = coef, y = alpha)) + 
+  geom_point(alpha = 0.5) +
+  xlab("Limma voom coefficient") + ylab(expression(paste("Phenotime ", alpha)))
+
+ggplot(df_limma, aes(x = coef, y = alpha, color = mu)) + 
+  geom_point(alpha = 0.5) +
+  xlab("Limma voom coefficient") + 
+  ylab(expression(paste("Phenotime ", alpha))) +
+  scale_color_viridis(name = expression(mu))
+```
+
+There is some "twisting" there which may be due to using a mixed effects model rather than straight forward DE.
+
+Is there any relationship between the limma voom reported coefficients and phenotimes $\beta$ values?
+
+```{r compare-beta}
+ggplot(df_limma, aes(x = coef, y = beta)) + geom_point(alpha = 0.5) +
+  xlab("Limma voom coefficient") + ylab(expression(paste("Phenotime ", beta)))
+```
+
+So no obvious correlations. Let's just double check the $p$-values:
+
+```{r limma-pval}
+ggplot(df_limma, aes(x = beta, y = log10pval)) + geom_point(alpha = 0.5) +
+  ylab("Limma voom -log10 pval") + xlab(expression(paste("Phenotime ", beta)))
+```
+
+Again no obvious relationship.
+
+# What is pseudotime?
+
+```{r get-correlations}
+all_genes <- fData(sce)$ensembl_gene_id
+
+cs <- apply(exprs(sce), 1, cor, tmap)
+cdf <- data_frame(feature = all_genes, correlation = cs)
+
+upreg_genes <- filter(cdf, correlation > 0.5) %>% extract2("feature") 
+downreg_genes <- filter(cdf, correlation < -0.5) %>% extract2("feature")
+
+upg <- 1 * (all_genes %in% upreg_genes)
+downg <- 1 * (all_genes %in% downreg_genes)
+
+names(upg) <- names(downg) <- all_genes
+
+pwfup <- nullp(upg, genome, id)
+goup <- goseq(pwfup, genome, id, test.cats = "GO:BP")
+
+pwfdown <- nullp(downg, genome, id)
+godown <- goseq(pwfdown, genome, id, test.cats = "GO:BP")
+```
+
+Graph results:
+
+```{r graph-res}
+parse_go <- function(go, type, n_tested) {
+  go <- go %>% 
+    mutate(qval = p.adjust(over_represented_pvalue)) %>% 
+    mutate(log10qval = -log10(qval),
+           prop_in_cat = numInCat / n_tested) %>% 
+    head(n = 12) %>% 
+    mutate(type = type) %>% 
+    tbl_df() %>% 
+    arrange(desc(log10qval))
+  go
+}
+
+gos <- bind_rows(
+  parse_go(goup, "Up-regulated", length(upreg_genes)),
+  parse_go(godown, "Down-regulated", length(downreg_genes))
+)
+
+gos$term <- factor(gos$term, levels = gos$term[order(gos$log10qval)])
+
+
+ggplot(gos, aes(x = term, y = log10qval, color = type)) +
+  geom_point() +
+  facet_wrap(~ type, scales = "free_y", nrow = 2) +
+  coord_flip() +
+  theme(axis.title.y = element_blank(), legend.position = "none") +
+  scale_color_brewer(palette = "Set1") +
+  ylab(expression(paste(log[10], " q-value"))) +
+  theme(axis.text = element_text(size = 10),
+        axis.title.x = element_text(size = 11))
+```
+
+
+
+Do the same for beta:
+
+```{r go-beta}
+genome <- "hg19"
+id <- "ensGene"
+
+all_genes <- fData(sce)$ensembl_gene_id
+df_beta$ensembl_gene_id <- all_genes
+
+
+upreg_genes <- filter(df_beta, beta > .5 & is_sig) %>% extract2("ensembl_gene_id")
+downreg_genes <- filter(df_beta, beta < -.5 & is_sig) %>% extract2("ensembl_gene_id")
+
+# upreg_genes <- c(upreg_genes, downreg_genes)
+
+upg <- 1 * (all_genes %in% upreg_genes)
+downg <- 1 * (all_genes %in% downreg_genes)
+
+names(upg) <- names(downg) <- all_genes
+
+pwfup <- nullp(upg, genome, id)
+goup <- goseq(pwfup, genome, id, test.cats = "GO:BP")
+
+pwfdown <- nullp(downg, genome, id)
+godown <- goseq(pwfdown, genome, id, test.cats = "GO:BP")
+```
+
+Graph results:
+
+```{r graph-res}
+parse_go <- function(go, type, n_tested) {
+  go <- go %>% 
+    mutate(qval = p.adjust(over_represented_pvalue)) %>% 
+    mutate(log10qval = -log10(qval),
+           prop_in_cat = numInCat / n_tested) %>% 
+    head(n = 10) %>% 
+    mutate(type = type) %>% 
+    tbl_df() %>% 
+    arrange(desc(log10qval))
+  go
+}
+
+gos <- bind_rows(
+  parse_go(goup, "Up-regulated", length(upreg_genes)),
+  parse_go(godown, "Down-regulated", length(downreg_genes))
+)
+
+gos$term <- factor(gos$term, levels = gos$term[order(gos$log10qval)])
+
+
+ggplot(gos, aes(x = term, y = log10qval, color = type)) +
+  geom_point() +
+  facet_wrap(~ type, scales = "free_y", nrow = 2) +
+  coord_flip() +
+  theme(axis.title.y = element_blank(), legend.position = "none") +
+  scale_color_brewer(palette = "Set1") +
+  ylab(expression(paste(log[10], " q-value"))) +
+  theme(axis.text = element_text(size = 10),
+        axis.title.x = element_text(size = 11))
+```
+
+Compare to known coefficients:
+
+```{r compare-known-coef}
+df <- dplyr::select(pData(sce), z = tmap, Tumor, Node, Metastasis, AJCC_Stage, PAM50_mRNA, RPPA_Clusters)
+
+df <- gather(df, variable, value, -z)
+
+variables <- unique(df$variable)
+
+plots <- lapply(variables, function(v) {
+  filter(df, variable == v) %>% 
+    ggplot(aes(x = value, y = z)) + geom_boxplot() +
+    ggtitle(v) + 
+    theme(axis.text.x = element_text(size = 9, angle = 90, hjust = 1),
+          axis.title.x = element_blank())
+})
+
+plot_grid(plotlist = plots)
+```
+
+```{r basal}
+gene <- "FOXC1_ENSG00000054598"
+gene <- "FBP1_ENSG00000165140"
+
+is_basal <- sce$PAM50_mRNA == "Basal-like"
+
+  df_gex <- t(exprs(sce))[, gene, drop=FALSE] %>% 
+    as_data_frame() %>% 
+    dplyr::mutate(phenotime = tmap, x = is_basal) %>% 
+    gather(gene, expression, -phenotime, -x)
+  
+  df_gex$x[is.na(df_gex$x)] <- "NA"
+  df_gex$x <- plyr::mapvalues(df_gex$x, from = sort(unique(df_gex$x)), 
+                              to = c("Not basal", "NA", "Basal"))
+  
+  df_gex$x <- factor(df_gex$x, levels = c("Not basal", "NA", "Basal"))
+  df_gex <- filter(df_gex, x != "NA")
+  
+  df_gex_nox <- dplyr::select(df_gex, -x)
+  
+  ggplot(df_gex, aes(x = phenotime, y = expression, color = x)) + 
+    geom_point(data = df_gex_nox, color = "grey70") +
+    geom_point() +
+    facet_wrap(~ x, scales = "free_y") + 
+    scale_color_brewer(palette = "Set1", name = "ER status") +
+    theme(legend.position = "none", strip.text.x = element_text(size = 9),
+          axis.title = element_text(size = 10),
+          axis.text = element_text(size = 9),
+          plot.title = element_text(size = 11)) +
+    stat_smooth(se = FALSE, method = "lm", size = 1.5, color = 'black') + # formula = y ~ ns(x,3), 
+    ggtitle(strsplit(gene, "_")[[1]][1]) +
+    ylab(expression(paste("Expression log"[2], "(TPM+1)"))) +
+    xlab("z")
+
+```
+
+Time for some reactome fun:
+
+```{r reactome-time}
+pathways <- c("1643713", "1226099",
+              "2219528", "2644603",
+              "3304351", "4791275")
+
+id_to_name <- as.list(reactomePATHID2NAME)
+pathway_names <- id_to_name[pathways]
+
+pathways_to_genes <- as.list(reactomePATHID2EXTID)
+
+gene_list <- pathways_to_genes[pathways]
+pathway_names <- sapply(pathway_names, function(pn) {
+  gsub("Homo sapiens: ", "", pn)
+})
+names(gene_list) <- pathway_names
+
+mart <- useMart("ensembl", "hsapiens_gene_ensembl")
+
+to_ensembl <- function(gl) {
+  bm <- getBM(attributes = c("ensembl_gene_id", "hgnc_symbol"),
+      filters = c("entrezgene"),
+      values = as.numeric(gl),
+      mart = mart)
+  return(bm$ensembl_gene_id)
+}
+
+gene_list_ensembl <- lapply(gene_list, to_ensembl)
+```
+
+And graph the results for various metrics:
+
+```{r graph-for-metrics}
+sce <- readRDS("../../data/BRCA/sce_brca_gene_level.rds")
+
+all_genes <- unique(unlist(gene_list_ensembl))
+all_genes <- all_genes[all_genes %in% fData(sce)$ensembl_gene_id]
+mm <- match(all_genes, fData(sce)$ensembl_gene_id)
+is_basal <- sce$PAM50_mRNA == "Basal-like"
+
+Y <- t(exprs(sce)[mm, ])
+colnames(Y) <- all_genes
+
+df_gex <- Y %>% 
+  as_data_frame() %>% 
+  dplyr::mutate(is_basal, z = pData(sce)[['tmap']]) %>% 
+  gather(gene, expression, -is_basal, -z)
+
+df_pheno <- bind_rows(
+  lapply(names(gene_list_ensembl), function(n) {
+    data_frame(pathway = n, gene = gene_list_ensembl[[n]])
+  })
+)
+
+df <- inner_join(df_gex, df_pheno, by = 'gene')
+
+df2 <- filter(df, !is.na(is_basal)) %>% 
+  group_by(gene, pathway, is_basal) %>% 
+  summarise(gex = mean(expression))
+
+df3 <- df %>% # filter(df, !is.na(is_basal)) %>% 
+  group_by(pathway, z) %>% 
+  summarise(gex = median(expression))
+
+ggplot(df3, aes(x = z, y = gex)) + 
+  geom_point(alpha = 0.7) + 
+  facet_wrap(~ pathway, scales = 'free_y') +
+  ylab("Median pathway expression") +
+  stat_smooth(color = 'red', se = F)
+
+
+df4 <- df %>% # filter(df, !is.na(is_basal)) %>% 
+  group_by(pathway, z) %>% 
+  summarise(gex = var(expression))
+
+ggplot(df4, aes(x = z, y = gex)) + 
+  geom_point(alpha = 0.7) + 
+  facet_wrap(~ pathway, scales = 'free_y') +
+  ylab("Variance in pathway expression") +
+  stat_smooth(color = 'red', se = F)
+```
+
+Visualisation a la Dana Pe'er:
+
+```{r vis-dp}
+df <- group_by(df, gene) %>%
+  do((.$expression - mean(.$expression)) / sd(.$expression))
+
+ggplot(df, aes(x = z, y = expression, color = gene)) +
+  geom_smooth(se = FALSE, alpha = 0.8, method = 'lm') + 
+  geom_smooth(data = dplyr::select(df, -gene), 
+              se = FALSE, color = 'black', alpha = 0.8, method = 'lm') + 
+  facet_wrap(~ pathway, scales = 'free_y') + 
+  theme(legend.position = 'none')
+```
+
+
+Try normalised:
+
+```{r normalised}
+ss <- group_by(df, gene) %>% 
+  summarise(m = mean(expression), s = sd(expression))
+
+df <- inner_join(df, ss, by = 'gene')
+df$norm_exprs = (df$expression - df$m) / df$s
+
+ggplot(df, aes(x = z, y = norm_exprs, color = gene)) +
+  geom_smooth(se = FALSE, alpha = 0.8) + 
+  geom_smooth(data = dplyr::select(df, -gene), 
+              se = FALSE, color = 'black', alpha = 0.8) + 
+  facet_wrap(~ pathway, scales = 'free_y') + 
+  theme(legend.position = 'none') 
+```
+
+
+# Crossover bit for chris
+
+```{r df-beta}
+df_beta <- mutate(df_beta,
+                  crossover = - alpha / beta)
+
+filter(df_beta, is_sig) %>% 
+  ggplot(aes(x = crossover)) + geom_histogram()
+```
+
+
+
+```{r more-vis}
+textinfo <- frame_data(
+  ~x, ~y, ~label,
+  1.1, 0.15, "Gene upregulated\nMSI increases upregulation",
+  1.1, -0.15, "Gene upregulated\nMSI decreases upregulation",
+  -1.2, 0.15, "Gene downregulated\nMSI decreases downregulation",
+  -1.2, -0.15, "Gene downregulated\nMSI increases downregulation"
+)
+
+df_beta$is_sig_graph <- 
+  plyr::mapvalues(df_beta$is_sig, from = c(FALSE, TRUE),
+                  to = c("Non-significant", "Significant"))
+
+ggplot(df_beta, aes(x = c, y = beta, color = is_sig_graph)) + 
+  geom_point() +
+  geom_vline(xintercept = 0, linetype = 2, alpha = 0.5) +
+  geom_hline(yintercept = 0, linetype = 2, alpha = 0.5) +
+  scale_color_brewer(palette = "Greens", name = "Interaction") +
+  geom_text_repel(data = filter(df_beta, is_sig, abs(beta) > 1.2),
+                 aes(label = hgnc_symbol), color = 'black',
+                 size = 2) +
+  ylab(expression(beta)) +
+  theme(legend.position = 'bottom',
+        axis.text = element_text(size = 9),
+        axis.title = element_text(size = 10),
+        legend.title = element_text(size = 11),
+        legend.text = element_text(size = 10)) +
+  geom_text(data = textinfo, aes(x = x, y = y, label = label), 
+            color = 'black', size = 3)
+
+```

@@ -12,15 +12,22 @@ pst <- runif(N)
 
 # Discrete case -----------------------------------------------------------
 
-df_discrete <- data_frame(
+df_discrete_predicted <- data_frame(
   pst = pst,
   x1 = sigmoid(pst, 2, 10, 0.7),
   x2 = sigmoid(pst, -2, 10, 0.7)
 )
 
-gather(df_discrete, covariate, y, -pst) %>% 
-  arrange(pst) %>% 
-  ggplot(aes(x = pst, y = y, color = covariate)) +
+df_discrete_noise <- mutate(df_discrete_predicted,
+                      x1 = rnorm(length(x1), x1, .6),
+                      x2 = rnorm(length(x2), x2, .6))
+
+df_pred <- gather(df_discrete_predicted, covariate, y, -pst) %>% arrange(pst)
+df_noise <- gather(df_discrete_noise, covariate, y, -pst)
+
+
+ggplot(df_pred, aes(x = pst, y = y, color = covariate)) +
+  geom_point(data = df_noise, alpha = 0.4) +
   geom_line(size = 1.5) +
   scale_color_brewer(name = "Discrete\nCovariate", palette = "Set1") +
   xlab("Patient trajectory") + ylab("Dynamic observable") +
@@ -39,16 +46,20 @@ mu0 <- seq(-2, 2, length.out = 50)
 df_conts <- lapply(mu0, function(m0) {
   data_frame(
     pst = pst,
-    y = sigmoid(pst, m0, 10, 0.7),
+    y = sigmoid(rnorm(length(pst), pst, 0.01), m0, 10, 0.7),
     mu0 = m0
   )
 })
 
 dfc <- bind_rows(df_conts)
 
+dfc_noise <- mutate(dfc, y = rnorm(length(y), y, .6))
+
 dfc %>% arrange(mu0, pst) %>% 
   ggplot(aes(x = pst, y = y, group = mu0, color = mu0)) +
-  geom_line(size = 1.5) + scale_color_viridis(name = "Continuous\nCovariate") +
+  geom_point(data = dfc_noise) +
+  # geom_line(size = 1.5) + 
+  scale_color_viridis(name = "Continuous\nCovariate") +
   theme(legend.text = element_blank(), legend.direction = "horizontal",
         legend.title = element_text(hjust = 0.5),
         legend.position = "top", axis.text = element_blank(),

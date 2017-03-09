@@ -19,10 +19,11 @@ rule all:
         "data/OV/sce_ov.rds",
         "data/OV/sce_ov_clvm.rds",
         "data/OV/clvm_results.rds",
-	"data/BRCA/sce_brca.rds",
+	       "data/BRCA/sce_brca.rds",
         "data/BRCA/sce_brca_clvm.rds", "data/BRCA/sce_brca_gene_level.rds",
         "data/BRCA/clvm_results.rds",
-        "data/BRCA/expressed_genes.csv"
+        "data/BRCA/expressed_genes.csv",
+        "data/shalek/sce_shalek.rds"
 
 
 ## ------ COAD -----
@@ -59,7 +60,7 @@ rule coad_clvm:
     output:
         "data/COAD/clvm_results.rds"
     shell:
-        "Rscript scripts/run_cavi.R {input} {output}"
+        "Rscript scripts/run_cavi.R {input} {output} 1"
 
 ## ---- OV ----
 
@@ -86,7 +87,7 @@ rule ov_clvm:
     output:
         "data/OV/clvm_results.rds"
     shell:
-        "Rscript scripts/run_cavi.R {input} {output}"
+        "Rscript scripts/run_cavi.R {input} {output} 1"
 
 ## ---- BRCA ----
 
@@ -115,7 +116,7 @@ rule brca_clvm:
     output:
         "data/BRCA/clvm_results.rds"
     shell:
-        "Rscript scripts/run_cavi.R {input} {output}"
+        "Rscript scripts/run_cavi.R {input} {output} 1"
 
 rule brca_expressed_genes:
     input:
@@ -124,3 +125,30 @@ rule brca_expressed_genes:
         "data/BRCA/expressed_genes.csv"
     shell:
         "Rscript scripts/find_expressed_genes.R {input} {output}"
+
+
+## ---- Shalek ----
+
+rule shalek_to_sceset:
+    input:
+        "data/shalek/GSE48968_allgenesTPM_GSM1189042_GSM1190902.txt.gz"
+    output:
+        "data/shalek/sce_shalek.rds"
+    shell:
+        "Rscript scripts/shalek/shalek_to_sceset.R"
+
+rule prepare_shalek:
+    input:
+        "data/shalek/sce_shalek.rds"
+    output:
+        "data/shalek/sce_shalek_clvm.rds"
+    shell:
+        "Rscript -e \"rmarkdown::render('analysis/shalek/prepare_for_clvm.Rmd')\""
+
+rule ov_clvm:
+    input:
+        "data/shalek/sce_shalek_clvm.rds"
+    output:
+        "data/shalek/clvm_results.rds"
+    shell:
+        "Rscript scripts/run_cavi.R {input} {output} 2"
