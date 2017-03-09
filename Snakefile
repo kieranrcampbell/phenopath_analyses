@@ -153,4 +153,4 @@ rule shalek_clvm:
     output:
         "data/shalek/clvm_results.rds"
     shell:
-        "Rscript scripts/run_cavi.R {input} {output} 2"
+        "Rscript scripts/run_cavi.R {input} {output} 1"
