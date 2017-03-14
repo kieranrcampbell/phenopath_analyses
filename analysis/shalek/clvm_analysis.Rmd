@@ -242,7 +242,7 @@ names(wtest_results) <- c("mean_expression_lps",
                           "mean_expression_pam",
                           "mean_change_lps_over_pam",
                           "p_value")
-wtest_results <- mutate(wtest_results,
+wtest_results <- dplyr::mutate(wtest_results,
                         q_value = p.adjust(p_value, method = "BH"),
                         gene = featureNames(sce))
 
@@ -437,15 +437,77 @@ ggplot(d, aes(x = time, y = expression, color = stimulant)) +
   geom_line(data = ds, aes(y = mean_exprs, group = stimulant))
 ```
 
+Linear model:
+
+```{r linear-model}
+fit <- lm(pcavi$m_t ~ sce$time)
+print(summary(fit))
+```
+
 DPT:
 
 ```{r dpt}
 library(dpt)
-
-ts <- Transitions(sce)
+sce2 <- sce
+exprs(sce) <- log2(tpm(sce) + 1)
+ts <- Transitions(sce2)
 pt <- dpt(ts, branching = FALSE)
-pt$tmap <- tmap
+pt$tmap <- pcavi$m_t
+pt$time <- sce$time
 
-filter(pt, DPT > 0.1) %>% 
-  ggplot(aes(x = tmap, y =DPT)) + geom_point()
+dpt_fit <- lm(DPT ~ time, data = filter(pt, DPT > 0.13))
+dpt_r2 <- summary(dpt_fit)$r.squared
+
+r2_df <- frame_data(
+  ~ x, ~ y, ~ R2,
+  0.132, 0.15, paste0("R^{2}~with~capture~time:~", signif(dpt_r2, 1))
+)
+
+qplot(seq_along(pt$DPT), sort(pt$DPT)) +
+  xlab("Index") + ylab("DPT pseudotime (sorted)")
+
+dpt_sort_plot <- last_plot()
+
+filter(pt, DPT > 0.13) %>% 
+  ggplot(aes(x = tmap, y =DPT, color = time)) + geom_point() +
+  scale_colour_brewer(palette = "Set1", name = "Capture\ntime") +
+  xlab("z") + ylab("DPT pseudotime") + 
+  annotate("text", x = r2_df$x, y = r2_df$y, label = r2_df$R2, parse = TRUE) +
+  theme(legend.position = 'bottom')
+
+dpt_plot <- last_plot()
+```
+
+Monocle:
+
+```{r monocle}
+library(monocle)
+sce@logged <- TRUE
+cds <- toCellDataSet(sce)
+cds <- reduceDimension(cds)
+cds <- orderCells(cds)
+
+pt <- pt %>% mutate(monocle = cds$Pseudotime)
+
+monocle_fit <- lm(monocle ~ time, data = pt)
+monocle_r2 <- summary(monocle_fit)$r.squared
+
+r2_df <- frame_data(
+  ~ x, ~ y, ~ R2,
+  0, 80, paste0("R^{2}~with~capture~time:~", signif(monocle_r2, 1))
+)
+
+ggplot(pt, aes(x = tmap, y = monocle, color = time)) + geom_point() +
+  scale_colour_brewer(palette = "Set1", name = "Capture\ntime") +
+  xlab("z") + ylab("Monocle pseudotime") +
+  annotate("text", x = r2_df$x, y = r2_df$y, label = r2_df$R2, parse = TRUE) +
+  theme(legend.position = 'bottom')
+
+monocle_plot <- last_plot()
+```
+
+```{r put_altogether}
+plot_grid(dpt_sort_plot, NULL, dpt_plot, monocle_plot, 
+          labels = c("A", "", "B", "C"))
+ggsave("../../figs/s_compare_monocle_dpt.png", width = 10, height = 8)
 ```

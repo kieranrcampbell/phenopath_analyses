@@ -18,6 +18,7 @@ library(viridis)
 library(splines)
 library(DT)
 library(limma)
+library(edgeR)
 library(RColorBrewer)
 library(reactome.db)
 library(clvm)
@@ -79,6 +80,10 @@ df_beta <- data_frame(
   hgnc_symbol = fData(sce)$hgnc_symbol,
   ensembl_gene_id = fData(sce)$ensembl_gene_id
 )
+
+df_beta$is_sig_graph <- 
+  plyr::mapvalues(df_beta$is_sig, from = c(FALSE, TRUE),
+                  to = c("Non-significant", "Significant"))
 ```
 
 This gives:
@@ -228,12 +233,16 @@ And merge the results with phenotime:
 ```{r merge-with-us}
 int_df_limma <- dplyr::rename(df_beta, feature = gene)
 
+qvals <- p.adjust(fit$p.value[,2], method = 'BH')
+
 df_limma <- data_frame(coef = fit$coefficients[,2], 
                        pval = fit$p.value[,2],
+                       qval = qvals,
                        mu = pcavi$m_mu,
                        feature = featureNames(sce)) %>% 
   left_join(int_df_limma, by = "feature") %>% 
-  dplyr::mutate(log10pval = -log10(pval)) 
+  dplyr::mutate(log10qval = -log10(qval),
+                limma_sig = qval < 0.05) 
 ```
 
 Then we can compare in several ways. Firstly, are the $\alpha$ values consistent with the limma voom reported coefficients?
@@ -252,25 +261,37 @@ ggplot(df_limma, aes(x = coef, y = alpha, color = mu)) +
 
 There is some "twisting" there which may be due to using a mixed effects model rather than straight forward DE.
 
-Is there any relationship between the limma voom reported coefficients and phenotimes $\beta$ values?
+Nice plot for paper:
+
 
 ```{r compare-beta}
-ggplot(df_limma, aes(x = coef, y = beta)) + geom_point(alpha = 0.5) +
-  xlab("Limma voom coefficient") + ylab(expression(paste("Phenotime ", beta)))
+
+cols <- RColorBrewer::brewer.pal(3, "Set2")
+cols2 <- c("#c5e2d9", cols[2])
+
+ggplot(df_limma, x =-log10(qval), aes(x = beta, y =-log10(qval), color = is_sig_graph)) + 
+  geom_point() +
+  ylab(expression(paste("Limma voom -", log[10], "(q-value)"))) + 
+  xlab(expression(paste("PhenoPath ", beta))) +
+  # theme(legend.position = 'top') +
+  geom_hline(yintercept = -log10(0.05), linetype = 2, alpha = 0.5) +
+  theme(axis.text = element_text(size = 8),
+        axis.title = element_text(size = 9)) +
+  #theme(legend.title = element_text(size = 10),
+  #      legend.text = element_text(size = 9)) +
+  theme(legend.position = "none") +
+  scale_color_manual(values = cols2, name = "Interaction") 
+
+limma_plot <- ggExtra::ggMarginal(last_plot(), margins = "y", type = "histogram", size = 10)
 ```
-
-So no obvious correlations. Let's just double check the $p$-values:
-
-```{r limma-pval}
-ggplot(df_limma, aes(x = beta, y = log10pval)) + geom_point(alpha = 0.5) +
-  ylab("Limma voom -log10 pval") + xlab(expression(paste("Phenotime ", beta)))
-```
-
-Again no obvious relationship.
 
 # What is pseudotime?
 
 ```{r get-correlations}
+library(goseq)
+genome <- "hg19"
+id <- "ensGene"
+
 all_genes <- fData(sce)$ensembl_gene_id
 
 cs <- apply(exprs(sce), 1, cor, tmap)
@@ -313,16 +334,22 @@ gos <- bind_rows(
 
 gos$term <- factor(gos$term, levels = gos$term[order(gos$log10qval)])
 
+filter(gos, type == "Up-regulated") %>% 
+  ggplot(aes(x = term, y = log10qval)) +
+    geom_point() +
+    # facet_wrap(~ type, scales = "free_y", nrow = 2) +
+    coord_flip() +
+    theme(axis.title.y = element_blank(), legend.position = "none") +
+    # scale_color_brewer(palette = "Set1") +
+    ylab(expression(paste(log[10], " q-value"))) +
+    theme(#legend.position = c(-.2, -.14), legend.direction = "horizontal",
+      legend.position = c(0, 0), legend.direction = "horizontal",
+        axis.text = element_text(size = 8),
+        axis.title = element_text(size = 10),
+        legend.title = element_text(size = 11),
+        legend.text = element_text(size = 10)) 
 
-ggplot(gos, aes(x = term, y = log10qval, color = type)) +
-  geom_point() +
-  facet_wrap(~ type, scales = "free_y", nrow = 2) +
-  coord_flip() +
-  theme(axis.title.y = element_blank(), legend.position = "none") +
-  scale_color_brewer(palette = "Set1") +
-  ylab(expression(paste(log[10], " q-value"))) +
-  theme(axis.text = element_text(size = 10),
-        axis.title.x = element_text(size = 11))
+goplot <- last_plot()
 ```
 
 
@@ -527,37 +554,8 @@ ggplot(df4, aes(x = z, y = gex)) +
   stat_smooth(color = 'red', se = F)
 ```
 
-Visualisation a la Dana Pe'er:
-
-```{r vis-dp}
-df <- group_by(df, gene) %>%
-  do((.$expression - mean(.$expression)) / sd(.$expression))
-
-ggplot(df, aes(x = z, y = expression, color = gene)) +
-  geom_smooth(se = FALSE, alpha = 0.8, method = 'lm') + 
-  geom_smooth(data = dplyr::select(df, -gene), 
-              se = FALSE, color = 'black', alpha = 0.8, method = 'lm') + 
-  facet_wrap(~ pathway, scales = 'free_y') + 
-  theme(legend.position = 'none')
-```
 
 
-Try normalised:
-
-```{r normalised}
-ss <- group_by(df, gene) %>% 
-  summarise(m = mean(expression), s = sd(expression))
-
-df <- inner_join(df, ss, by = 'gene')
-df$norm_exprs = (df$expression - df$m) / df$s
-
-ggplot(df, aes(x = z, y = norm_exprs, color = gene)) +
-  geom_smooth(se = FALSE, alpha = 0.8) + 
-  geom_smooth(data = dplyr::select(df, -gene), 
-              se = FALSE, color = 'black', alpha = 0.8) + 
-  facet_wrap(~ pathway, scales = 'free_y') + 
-  theme(legend.position = 'none') 
-```
 
 
 # Crossover bit for chris
@@ -575,31 +573,93 @@ filter(df_beta, is_sig) %>%
 ```{r more-vis}
 textinfo <- frame_data(
   ~x, ~y, ~label,
-  1.1, 0.15, "Gene upregulated\nMSI increases upregulation",
-  1.1, -0.15, "Gene upregulated\nMSI decreases upregulation",
-  -1.2, 0.15, "Gene downregulated\nMSI decreases downregulation",
-  -1.2, -0.15, "Gene downregulated\nMSI increases downregulation"
+  1.4, 0.15, "Gene upregulated\nER+ increases upregulation",
+  1.4, -0.15, "Gene upregulated\nER+ decreases upregulation",
+  -1.5, 0.15, "Gene downregulated\nER+ decreases downregulation",
+  -1.5, -0.15, "Gene downregulated\nER+ increases downregulation"
 )
 
-df_beta$is_sig_graph <- 
-  plyr::mapvalues(df_beta$is_sig, from = c(FALSE, TRUE),
-                  to = c("Non-significant", "Significant"))
+cols <- RColorBrewer::brewer.pal(3, "Set2")
+cols2 <- c("#c5e2d9", cols[2])
 
 ggplot(df_beta, aes(x = c, y = beta, color = is_sig_graph)) + 
   geom_point() +
   geom_vline(xintercept = 0, linetype = 2, alpha = 0.5) +
   geom_hline(yintercept = 0, linetype = 2, alpha = 0.5) +
-  scale_color_brewer(palette = "Greens", name = "Interaction") +
+  scale_color_manual(values = cols2, name = "Interaction") +
   geom_text_repel(data = filter(df_beta, is_sig, abs(beta) > 1.2),
-                 aes(label = hgnc_symbol), color = 'black',
-                 size = 2) +
+                  aes(label = hgnc_symbol), color = 'black', 
+                  size = 2.5) +
   ylab(expression(beta)) +
   theme(legend.position = 'bottom',
-        axis.text = element_text(size = 9),
-        axis.title = element_text(size = 10),
+        axis.text = element_text(size = 10),
+        axis.title = element_text(size = 11),
         legend.title = element_text(size = 11),
         legend.text = element_text(size = 10)) +
   geom_text(data = textinfo, aes(x = x, y = y, label = label), 
             color = 'black', size = 3)
 
+lplot <- last_plot()
+lplot
+
 ```
+
+```{r make-gene-plot}
+make_gene_plot <- function(genes) {
+  inds <- match(genes, fData(sce)$hgnc_symbol)
+  
+  df <- t(exprs(sce))[, inds, drop=FALSE] 
+  colnames(df) <- fData(sce)$hgnc_symbol[inds]
+  
+  df <- as_data_frame(df) %>% 
+    dplyr::mutate(phenotime = tmap, x = as.character(x)) %>% 
+    gather(gene, expression, -phenotime, -x)
+  
+  df$x[is.na(df$x)] <- "NA"
+  df$x <- plyr::mapvalues(df$x, from = sort(unique(df$x)), to = c("ER-", "ER+"))
+  
+  df$x <- factor(df$x, levels = c("ER-", "ER+"))
+  
+  df_nox <- dplyr::select(df, -x)
+  
+  ggplot(df, aes(x = phenotime, y = expression, fill = x, color = x)) + 
+    geom_point(data = df_nox, color = "grey80", fill = "grey80") +
+    geom_point(shape = 21, color = 'grey30', alpha = 0.7) +
+    facet_grid(gene ~ x, scales = "free") + 
+    scale_fill_brewer(palette = "Set1", name = "MSI") +
+    scale_color_brewer(palette = "Set1", name = "MSI") +
+    theme(legend.position = "none", strip.text = element_text(size = 9),
+          strip.background = element_rect(colour = "black", fill = "grey95", 
+                                          size = 0.5, linetype = 1)) +
+  theme(axis.text = element_text(size = 9),
+        axis.title = element_text(size = 10)) +
+    stat_smooth(se = FALSE, method = "lm", size = 1.5, formula = y ~ ns(x,3),
+                color = 'grey30') +
+    ylab(expression(Expression ~ log[2] ~ "(TPM + 1)")) + 
+    xlab("z (vascular development)")
+}
+
+genes <- c("FBP1", "RGMA")
+
+make_gene_plot(genes)
+
+gene_plot <- last_plot()
+```
+
+
+```{r large-plot}
+lsize <- 11
+bottom_left <- plot_grid(plot_grid(NULL, limma_plot, NULL, nrow = 1, rel_widths = c(1,6, 1)), 
+                         goplot,
+                         ncol = 1, labels = c("F", "G"),
+                         label_size = lsize)
+bottom_grid <- plot_grid(bottom_left, gene_plot, nrow = 1, labels = c("", "H"),
+                         label_size = lsize)
+
+plot_grid(lplot, bottom_grid, ncol = 1, rel_heights = c(2,1.5), labels = c("E",""),
+          label_size = lsize)
+
+saveRDS(last_plot(), "../../figs/brca.rds")
+```
+
+

@@ -193,7 +193,7 @@ mlh1 <- c("MLH1")
 make_gene_plot <- function(genes) {
   inds <- match(genes, fData(sce)$hgnc_symbol)
   
-  df <- t(exprs(sce))[, ind, drop=FALSE] 
+  df <- t(exprs(sce))[, inds, drop=FALSE] 
   colnames(df) <- fData(sce)$hgnc_symbol[inds]
   
   df <- as_data_frame(df) %>% 
@@ -297,8 +297,9 @@ ggplot(df_limma, x =-log10(msi_qval), aes(x = beta_msi, y =-log10(msi_qval), col
   geom_hline(yintercept = -log10(0.05), linetype = 2, alpha = 0.5) +
   theme(axis.text = element_text(size = 8),
         axis.title = element_text(size = 9)) +
-  theme(legend.title = element_text(size = 10),
-        legend.text = element_text(size = 9)) +
+  #theme(legend.title = element_text(size = 10),
+  #      legend.text = element_text(size = 9)) +
+  theme(legend.position = "none") +
   scale_color_manual(values = cols2, name = "Interaction") 
 
 limma_plot <- last_plot()
@@ -346,7 +347,7 @@ ggplot(df_beta, aes(x = c, y = beta_msi, color = is_sig_graph)) +
                   aes(label = hgnc_symbol), color = 'black', 
                   size = 2.5) +
   ylab(expression(beta)) +
-  theme(legend.position = 'top',
+  theme(legend.position = 'bottom',
         axis.text = element_text(size = 10),
         axis.title = element_text(size = 11),
         legend.title = element_text(size = 11),
@@ -362,6 +363,7 @@ lplot
 
 
 ```{r get-correlations}
+library(goseq)
 genome <- "hg19"
 id <- "ensGene"
 
@@ -429,8 +431,8 @@ goplot <- last_plot()
 
 ```{r large-plot}
 lsize <- 11
-bottom_left <- plot_grid(goplot, 
-                         plot_grid(NULL, limma_plot, nrow = 1, rel_widths = c(1,8)), 
+bottom_left <- plot_grid(plot_grid(NULL, limma_plot, NULL, nrow = 1, rel_widths = c(1,6, 1)), 
+                         goplot,
                          ncol = 1, labels = c("B", "C"),
                          label_size = lsize)
 bottom_grid <- plot_grid(bottom_left, gene_plot, nrow = 1, labels = c("", "D"),
@@ -438,5 +440,7 @@ bottom_grid <- plot_grid(bottom_left, gene_plot, nrow = 1, labels = c("", "D"),
 
 plot_grid(lplot, bottom_grid, ncol = 1, rel_heights = c(2,1.5), labels = c("A",""),
           label_size = lsize)
+
+saveRDS(last_plot(), "../../figs/coad.rds")
 ```
 
