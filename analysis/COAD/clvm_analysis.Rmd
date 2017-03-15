@@ -6,7 +6,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, cache = TRUE, fig.width = 6, fig.height = 4)
+knitr::opts_chunk$set(echo = TRUE, cache = FALSE, fig.width = 6, fig.height = 4)
 
 library(scater)
 library(tidyverse)
@@ -302,13 +302,13 @@ ggplot(df_limma, x =-log10(msi_qval), aes(x = beta_msi, y =-log10(msi_qval), col
   theme(legend.position = "none") +
   scale_color_manual(values = cols2, name = "Interaction") 
 
-limma_plot <- last_plot()
+limma_plot <- ggExtra::ggMarginal(last_plot(), margins = "y", type = "histogram", size = 10)
 ```
 
 So no obvious correlations. Let's just double check the $p$-values:
 
 ```{r limma-pval}
-ggplot(df_limma, aes(x = beta_msi, y = msi_log10pval)) + geom_point(alpha = 0.5) +
+ggplot(df_limma, aes(x = beta_msi, y = msi_log10qval)) + geom_point(alpha = 0.5) +
   ylab("Limma voom -log10 pval") + xlab(expression(paste("Phenotime ", beta)))
 ```
 
@@ -438,9 +438,15 @@ bottom_left <- plot_grid(plot_grid(NULL, limma_plot, NULL, nrow = 1, rel_widths 
 bottom_grid <- plot_grid(bottom_left, gene_plot, nrow = 1, labels = c("", "D"),
                          label_size = lsize)
 
-plot_grid(lplot, bottom_grid, ncol = 1, rel_heights = c(2,1.5), labels = c("A",""),
+p <- plot_grid(lplot, bottom_grid, ncol = 1, 
+               rel_heights = c(2,1.2), labels = c("A",""),
           label_size = lsize)
 
-saveRDS(last_plot(), "../../figs/coad.rds")
+print( p )
+
+saveRDS(limma_plot, "../../figs/coad/limma_plot.rds")
+saveRDS(goplot, "../../figs/coad/goplot.rds")
+saveRDS(gene_plot, "../../figs/coad/gene_plot.rds")
+saveRDS(lplot, "../../figs/coad/lplot.rds")
 ```
 

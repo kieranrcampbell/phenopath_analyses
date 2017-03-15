@@ -6,7 +6,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, cache = TRUE, fig.width = 6, fig.height = 4)
+knitr::opts_chunk$set(echo = TRUE, cache = FALSE, fig.width = 6, fig.height = 4)
 
 library(scater)
 library(tidyverse)
@@ -29,6 +29,10 @@ set.seed(123L)
 
 scale_vec <- function(x) (x - mean(x)) / sd(x)
 
+select <- dplyr::select
+filter <- dplyr::filter
+mutate <- dplyr::mutate
+arrange <- dplyr::arrange
 ```
 
 # Load data
@@ -144,30 +148,6 @@ t(exprs(sce))[, top_genes] %>%
   stat_smooth(se = FALSE, method = "lm", size = 2) + 
   scale_color_brewer(name = "ER_status", palette = 'Set1')
 ```
-
-
-Nice immune response plot:
-
-```{r nice-immune-response}
-df_immune <- t(exprs(sce))[, immune_inds, drop=FALSE] %>% 
-  as_data_frame() %>% 
-  dplyr::mutate(phenotime = tmap, x = x) %>% 
-  gather(gene, expression, -phenotime, -x)
-
-df_immune <- mutate(df_immune, 
-                  gene_symbol = sapply(strsplit(gene, "_"), `[`, 1))
-
-ggplot(df_immune, aes(x = phenotime, y = expression, color = gene_symbol)) + 
-  geom_point(alpha = 0.4) +
-  facet_wrap(~ gene_symbol, scales = "free_y") + 
-  scale_color_brewer(palette = "Set1", name = "Gene") +
-  theme(legend.position = "none", strip.text.x = element_text(size = 9)) +
-  stat_smooth(se = FALSE, method = "lm", size = 2, formula = y ~ ns(x,3)) +
-  ylab(expression(paste("Expression log"[2], "(TPM+1)"))) +
-  xlab(expression(z))
-
-```
-
 
 # Plot top genes
 
@@ -383,7 +363,7 @@ godown <- goseq(pwfdown, genome, id, test.cats = "GO:BP")
 
 Graph results:
 
-```{r graph-res}
+```{r parse-go}
 parse_go <- function(go, type, n_tested) {
   go <- go %>% 
     mutate(qval = p.adjust(over_represented_pvalue)) %>% 
@@ -417,7 +397,7 @@ ggplot(gos, aes(x = term, y = log10qval, color = type)) +
 
 Compare to known coefficients:
 
-```{r compare-known-coef}
+```{r compare-known-coef, eval = FALSE}
 df <- dplyr::select(pData(sce), z = tmap, Tumor, Node, Metastasis, AJCC_Stage, PAM50_mRNA, RPPA_Clusters)
 
 df <- gather(df, variable, value, -z)
@@ -435,7 +415,7 @@ plots <- lapply(variables, function(v) {
 plot_grid(plotlist = plots)
 ```
 
-```{r basal}
+```{r basal, eval = FALSE}
 gene <- "FOXC1_ENSG00000054598"
 gene <- "FBP1_ENSG00000165140"
 
@@ -504,7 +484,7 @@ gene_list_ensembl <- lapply(gene_list, to_ensembl)
 
 And graph the results for various metrics:
 
-```{r graph-for-metrics}
+```{r graph-for-metrics, eval = FALSE}
 sce <- readRDS("../../data/BRCA/sce_brca_gene_level.rds")
 
 all_genes <- unique(unlist(gene_list_ensembl))
@@ -547,11 +527,11 @@ df4 <- df %>% # filter(df, !is.na(is_basal)) %>%
   group_by(pathway, z) %>% 
   summarise(gex = var(expression))
 
-ggplot(df4, aes(x = z, y = gex)) + 
-  geom_point(alpha = 0.7) + 
-  facet_wrap(~ pathway, scales = 'free_y') +
-  ylab("Variance in pathway expression") +
-  stat_smooth(color = 'red', se = F)
+# ggplot(df4, aes(x = z, y = gex)) + 
+#   geom_point(alpha = 0.7) + 
+#   facet_wrap(~ pathway, scales = 'free_y') +
+#   ylab("Variance in pathway expression") +
+#   stat_smooth(color = 'red', se = F)
 ```
 
 
@@ -565,7 +545,10 @@ df_beta <- mutate(df_beta,
                   crossover = - alpha / beta)
 
 filter(df_beta, is_sig) %>% 
-  ggplot(aes(x = crossover)) + geom_histogram()
+  ggplot(aes(x = crossover)) + geom_histogram() +
+  xlab("Convergence point")
+
+ggsave("../../figs/supplementary_crossover.png", width = 6, height = 5)
 ```
 
 
@@ -656,10 +639,13 @@ bottom_left <- plot_grid(plot_grid(NULL, limma_plot, NULL, nrow = 1, rel_widths 
 bottom_grid <- plot_grid(bottom_left, gene_plot, nrow = 1, labels = c("", "H"),
                          label_size = lsize)
 
-plot_grid(lplot, bottom_grid, ncol = 1, rel_heights = c(2,1.5), labels = c("E",""),
+plot_grid(lplot, bottom_grid, ncol = 1, rel_heights = c(2,1.2), labels = c("E",""),
           label_size = lsize)
 
-saveRDS(last_plot(), "../../figs/brca.rds")
+saveRDS(limma_plot, "../../figs/brca/limma_plot.rds")
+saveRDS(goplot, "../../figs/brca/goplot.rds")
+saveRDS(gene_plot, "../../figs/brca/gene_plot.rds")
+saveRDS(lplot, "../../figs/brca/lplot.rds")
 ```
 
 

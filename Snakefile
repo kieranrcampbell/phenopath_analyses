@@ -5,10 +5,15 @@ All analyses for phenotime
 Notes:
     - Data downloaded from https://osf.io/gqrz9/
 
-Kieran R Campbell, February 2017
+Kieran R Campbell, February-March 2017
 """
 
 R_opts = "--vanilla"
+
+plot_names = ['limma_plot', 'goplot', 'gene_plot', 'lplot']
+plot_files = [p + ".rds" for p in plot_names]
+plot_files_coad = ["figs/coad/" + pf for pf in plot_files]
+plot_files_brca = ["figs/brca/" + pf for pf in plot_files]
 
 
 rule all:
@@ -19,13 +24,16 @@ rule all:
         "data/OV/sce_ov.rds",
         "data/OV/sce_ov_clvm.rds",
         "data/OV/clvm_results.rds",
-	       "data/BRCA/sce_brca.rds",
-        "data/BRCA/sce_brca_clvm.rds", "data/BRCA/sce_brca_gene_level.rds",
+        "data/BRCA/sce_brca.rds",
+        "data/BRCA/sce_brca_clvm.rds",
+        "data/BRCA/sce_brca_gene_level.rds",
         "data/BRCA/clvm_results.rds",
         "data/BRCA/expressed_genes.csv",
         "data/shalek/sce_shalek.rds",
-	"data/shalek/sce_shalek_clvm.rds",
-	"data/shalek/clvm_results.rds"
+	    "data/shalek/sce_shalek_clvm.rds",
+        "data/shalek/clvm_results.rds",
+        plot_files_coad,
+        plot_files_brca
 
 
 ## ------ COAD -----
@@ -63,6 +71,15 @@ rule coad_clvm:
         "data/COAD/clvm_results.rds"
     shell:
         "Rscript scripts/run_cavi.R {input} {output} 1"
+
+rule coad_analysis:
+    input:
+        "data/COAD/clvm_results.rds",
+        "data/COAD/sce_coad_clvm.rds"
+    output:
+        plot_files_coad
+    shell:
+        "Rscript -e \"rmarkdown::render('analysis/COAD/clvm_analysis.Rmd')\""
 
 ## ---- OV ----
 
@@ -128,6 +145,15 @@ rule brca_expressed_genes:
     shell:
         "Rscript scripts/find_expressed_genes.R {input} {output}"
 
+rule brca_analysis:
+    input:
+        "data/BRCA/clvm_results.rds",
+        "data/BRCA/sce_brca_clvm.rds"
+    output:
+        plot_files_brca
+    shell:
+        "Rscript -e \"rmarkdown::render('analysis/BRCA/clvm_analysis.Rmd')\""
+
 
 ## ---- Shalek ----
 
@@ -154,3 +180,13 @@ rule shalek_clvm:
         "data/shalek/clvm_results.rds"
     shell:
         "Rscript scripts/run_cavi.R {input} {output} 1"
+
+## ---- Overall cancer figure
+
+rule cancer_figure:
+    input:
+        "figs/coad.rds", "figs/brca.rds"
+    output:
+        "figs/cancer_figure.png"
+    shell:
+        "Rscript scripts/cancer_figure.R"
