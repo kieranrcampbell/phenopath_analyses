@@ -185,7 +185,7 @@ rule shalek_clvm:
 
 rule cancer_figure:
     input:
-        "figs/coad.rds", "figs/brca.rds"
+        plot_files_coad, plot_files_brca
     output:
         "figs/cancer_figure.png"
     shell:
