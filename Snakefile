@@ -4,6 +4,8 @@ All analyses for phenotime
 
 Notes:
     - Data downloaded from https://osf.io/gqrz9/
+    - If pandoc gives an error, open Rstudio, type "sys.getenv("RSTUDIO_PANDOC")"
+    and append the value to the $PATH environment variable
 
 Kieran R Campbell, February-March 2017
 """
@@ -46,7 +48,8 @@ rule all:
         # plot_files_brca,
         fasta_files,
         fastq_str1, fastq_str2,
-        kallisto_quants
+        kallisto_quants,
+        "analysis/simulations/simulations.html"
 
 
 ## ------ COAD -----
@@ -254,3 +257,11 @@ rule kallisto:
         "data/simulations/quant/sample_{sam}/abundance.tsv"
     shell:
         "kallisto quant -i data/simulations/ref/chr22_small.idx -o data/simulations/quant/sample_{wildcards.sam} -b 100 {input.str1} {input.str2}"
+
+rule simulations_rmd:
+    input:
+        kallisto_quants
+    output:
+        "analysis/simulations/simulations.html"
+    shell:
+        "Rscript -e \"rmarkdown::render('analysis/simulations/simulations.Rmd')\""
