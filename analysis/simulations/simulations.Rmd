@@ -131,11 +131,11 @@ ggplot(pp_df, aes(x = regime_txt, y = abs(limma_coef), color = limma_signif)) +
   xlab("Simulation regime") +
   ylab("Absolute value of limma coefficient") +
   scale_color_brewer(palette = "Set2",
-                     name = "Limma voom significant at 5% FDR") +
+                     name = "Limma voom\nsignificant at 5% FDR") +
   theme_cowplot(font_size = 11) +
-  theme(legend.position = "top") +
-  theme(axis.text.x = element_text(size = 8),
-        axis.title.y = element_text(size = 10))
+  theme(legend.position = "right") +
+  theme(axis.text.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9))
 limma_plot <- last_plot()
 ```
 
@@ -145,10 +145,10 @@ ggplot(pp_df, aes(x = regime_txt, y = abs(pp_beta), color = pp_signif)) +
   xlab("Simulation regime") +
   ylab(expression(paste("|", beta, "|"))) +
   scale_color_brewer(palette = "Set2",
-                     name = expression(paste("PhenoPath significant at 2", sigma))) +
+                     name = expression(paste("PhenoPath\nsignificant at 2", sigma))) +
   theme_cowplot(font_size = 11) +
-  theme(legend.position = "top") +
-  theme(axis.text.x = element_text(size = 8))
+  theme(legend.position = "right") +
+  theme(axis.text.x = element_text(size = 9))
 phenopath_plot <- last_plot()
 ```
 
@@ -185,6 +185,17 @@ ggplot(pca_df, aes(x = PC1, y = PC2, color = pst, shape = x)) +
   theme_cowplot(font_size = 11)
 
 pca_plot <- last_plot()
+```
+
+We can also quantify the correlation to true pseudotime for both samples:
+
+```{r quantify-correlation}
+correlation_df <- data_frame(
+  pc1 = cor(pp_pst$pst, pp_pst$pc1),
+  z = cor(pp_pst$pst, pp_pst$phenopath)
+)
+
+knitr::kable(correlation_df)
 ```
 
 ## False discovery rate analysis
@@ -248,7 +259,7 @@ ggsave("../../figs/simulations_all.png", width = 11, height = 8)
 ## Subfigure of main text
 
 ```{r simulation-all-plot}
-plot_grid(limma_plot, phenopath_plot, nrow = 1)
+plot_grid(limma_plot, phenopath_plot, nrow = 2, align = 'v')
 
-ggsave("../../figs/simulations.png", width = 11.1, height = 3)
+ggsave("../../figs/simulations.png", width = 9, height = 6, scale = 0.92)
 ```

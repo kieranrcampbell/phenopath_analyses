@@ -49,7 +49,11 @@ rule all:
         fasta_files,
         fastq_str1, fastq_str2,
         kallisto_quants,
-        "analysis/simulations/simulations.html"
+        "analysis/simulations/simulations.html",
+        "figs/shalek.png",
+        "figs/s_compare_monocle_dpt.png",
+        "figs/shalek.png",
+        "figs/s_compare_monocle_dpt.png"
 
 
 ## ------ COAD -----
@@ -197,6 +201,27 @@ rule all:
 #     shell:
 #         "Rscript scripts/run_cavi.R {input} {output} 1"
 
+
+
+rule prepare_shalek:
+    input:
+        "data/shalek/sce_shalek.rds"
+    output:
+        "data/shalek/sce_shalek_clvm.rds"
+    shell:
+        "Rscript -e \"rmarkdown::render('analysis/shalek/prepare_for_clvm.Rmd')\""
+
+rule shalek_analysis:
+    input:
+        "data/shalek/clvm_results.rds"
+    output:
+        "figs/shalek.png",
+        "figs/s_compare_monocle_dpt.png",
+        "figs/shalek.png",
+        "figs/s_compare_monocle_dpt.png"
+    shell:
+        "Rscript -e \"rmarkdown::render('analysis/shalek/shalek_clvm_analysis.Rmd')\""
+
 ## ---- Overall cancer figure
 
 rule cancer_figure:
@@ -206,6 +231,7 @@ rule cancer_figure:
         "figs/cancer_figure.png"
     shell:
         "Rscript scripts/cancer_figure.R"
+
 
 
 ## ---- Simulations

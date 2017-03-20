@@ -142,6 +142,9 @@ sce$cluster <- mc$classification
 
 plotReducedDim(sce, colour_by = 'cluster', ncomponents = 3)
 
+pca_plot <- last_plot()
+saveRDS(pca_plot, file = "../../data/BRCA/brca_pca_plot.rds")
+
 to_keep_index <- which.max(table(sce$cluster))
 samples_to_keep <- which(sce$cluster == to_keep_index)
 
