@@ -1,0 +1,254 @@
+---
+title: "PhenoPath simulation study"
+author: "Kieran Campbell"
+date: "March 2017"
+output: 
+  html_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = FALSE, fig.width = 7, fig.height = 4)
+
+library(scater)
+library(limma)
+library(edgeR)
+library(clvm)
+library(ggbeeswarm)
+library(cowplot)
+library(viridis)
+library(readr)
+library(dplyr)
+
+
+set.seed(123L)
+
+scale_vec <- function(x) (x - mean(x)) / sd(x)
+
+select <- dplyr::select
+filter <- dplyr::filter
+mutate <- dplyr::mutate
+arrange <- dplyr::arrange
+```
+
+# Load data and convert into SCESet
+
+
+```{r load-all-data}
+kallisto_dirs <- dir("../../data/simulations/quant", full.names = TRUE)
+
+samples <- sapply(strsplit(kallisto_dirs, "_"), `[`, 2)
+
+sce <- readKallistoResults(directories = kallisto_dirs, samples = samples)
+
+fdata <- read_csv("../../data/simulations/gene_pars.csv")
+pdata <- read_csv("../../data/simulations/pdata.csv")
+
+sce$sample_index <- as.numeric(sampleNames(sce))
+mm <- match(sce$sample_index, pdata$sample)
+pdata <- pdata[mm, ]
+pData(sce) <- cbind(pData(sce), pdata)
+
+sce <- plotPCA(sce, colour_by = "x", ncomponents = 3, return_SCESet = TRUE)
+plotPCA(sce, colour_by = "pst", ncomponents = 3)
+
+fData(sce) <- cbind(fData(sce), fdata)
+```
+
+# Model inference
+
+## Limma voom
+
+```{r limma-voom}
+dge <- DGEList(counts(sce))
+dge <- calcNormFactors(dge)
+
+design <- model.matrix(~ (x == 1), pData(sce))
+v <- voom(dge, design, plot = TRUE)
+
+fit <- lmFit(v, design)
+fit <- eBayes(fit)
+results <- decideTests(fit)
+
+qvals <- p.adjust(fit$p.value[,2], method = 'BH')
+
+df_limma <- data_frame(limma_coef = fit$coefficients[,2], 
+                       limma_qval = qvals,
+                       feature = featureNames(sce))
+df_limma <- mutate(df_limma, limma_signif = limma_qval < 0.05)
+```
+
+## Phenopath
+
+```{r phenopath}
+y <- scale(t(exprs(sce)))
+x <- cbind(pData(sce)[[ 'x' ]])
+
+
+pcavi <- clvm(y, x)
+
+pc1 <- prcomp(t(exprs(sce)))$x[,1]
+
+pp_df <- data_frame(pp_alpha = pcavi$m_alpha[1,],
+                    pp_beta = pcavi$m_beta[1,],
+                    pp_c = pcavi$m_c,
+                    pp_signif = significant_interactions(pcavi, n = 2),
+                    feature = featureNames(sce),
+                    alpha = fData(sce)[['alpha']],
+                    beta = fData(sce)[['beta']],
+                    c = fData(sce)[['c']],
+                    regime = fData(sce)[['regime']])
+```
+
+
+## Merge results
+
+```{r merge-results}
+pp_df <- inner_join(pp_df, df_limma, by = 'feature')
+
+regime_texts <- c("Differential\nexpression only",
+                  "Pseudotime\nregulation only",
+                  "Pseudotime and\ncovariate interactions",
+                  "Differential\nexpression, pseudotime\nand covariate interactions")
+
+pp_df$regime_txt <- plyr::mapvalues(pp_df$regime, 
+                                    from = c("de", "pst", "pst_beta", "de_pst_beta"),
+                                    to = regime_texts)
+
+pp_df$regime_txt <- factor(pp_df$regime_txt, levels = regime_texts)
+
+pp_pst <- data_frame(phenopath = pcavi[['m_t']],
+                     pc1, pst = pData(sce)[['pst']])
+```
+
+# Results
+
+## Effect sizes under different conditions
+
+```{r limma-plot}
+ggplot(pp_df, aes(x = regime_txt, y = abs(limma_coef), color = limma_signif)) + 
+  geom_quasirandom(dodge.width = 0.5, alpha = 0.8) +
+  xlab("Simulation regime") +
+  ylab("Absolute value of limma coefficient") +
+  scale_color_brewer(palette = "Set2",
+                     name = "Limma voom significant at 5% FDR") +
+  theme_cowplot(font_size = 11) +
+  theme(legend.position = "top") +
+  theme(axis.text.x = element_text(size = 8),
+        axis.title.y = element_text(size = 10))
+limma_plot <- last_plot()
+```
+
+```{r phenopath-plot}
+ggplot(pp_df, aes(x = regime_txt, y = abs(pp_beta), color = pp_signif)) + 
+  geom_quasirandom(dodge.width = 0.5, alpha = 0.8) +
+  xlab("Simulation regime") +
+  ylab(expression(paste("|", beta, "|"))) +
+  scale_color_brewer(palette = "Set2",
+                     name = expression(paste("PhenoPath significant at 2", sigma))) +
+  theme_cowplot(font_size = 11) +
+  theme(legend.position = "top") +
+  theme(axis.text.x = element_text(size = 8))
+phenopath_plot <- last_plot()
+```
+
+## Inferred pseudotimes
+
+```{r pc1-plot}
+ggplot(pp_pst, aes(x = pst, y = pc1, color = factor(x))) + 
+  geom_point(alpha = 0.8) +
+  scale_colour_brewer(palette = "Set1", name = "x") +
+  theme_cowplot(font_size = 11) +
+  xlab("True pseudotime") + ylab("PC1")
+pc1_plot <- last_plot()
+```
+
+```{r z-plot}
+ggplot(pp_pst, aes(x = pst, y = phenopath, color = factor(x))) + 
+  geom_point(alpha = 0.8) +
+  scale_colour_brewer(palette = "Set1", name = "x") +
+  theme_cowplot(font_size = 11) +
+  xlab("True pseudotime") + ylab("PhenoPath z") +
+  theme(legend.position = "none")
+
+z_plot <- last_plot()
+```
+
+## PCA representation
+
+```{r pca-representation}
+pca_df <- as_data_frame(redDim(sce)[,1:2]) %>% 
+  mutate(x = factor(pData(sce)[['x']]), pst = pp_pst[['pst']])
+
+ggplot(pca_df, aes(x = PC1, y = PC2, color = pst, shape = x)) +
+  geom_point(size = 2.5) + scale_color_viridis(name = "True\npseudotime") +
+  theme_cowplot(font_size = 11)
+
+pca_plot <- last_plot()
+```
+
+## False discovery rate analysis
+
+We can find approximate false positive and negative rates for both Limma Voom and PhenoPath given the effect sizes stated. We're interested in
+
+$$ FDR = \frac{\text{# false discoveries}}{\text{# all discoveries}} $$
+
+We can construct a helper function for learning FDRs, etc:
+
+```{r fdr}
+calculate_statistics <- function(tbl) {
+  P <- sum(tbl[,2])
+  N <- sum(tbl[,1])
+  TP <- tbl[2,2]
+  TN <- tbl[1,1]
+  FP <- tbl[1,2]
+  FN <- tbl[2,1]
+  TPR <- TP / P
+  FPR <- FP / N
+  FDR <- FP / (TP + FP)
+  data.frame(P = P, N = N, TP = TP, TN = TN, FP = FP, 
+             FN = FN, TPR = TPR, FPR = FPR, FDR = FDR)
+}
+```
+
+### Limma Voom
+
+```{r fdr-limma}
+tbl_limma <- table(pp_df$alpha != 0, pp_df$limma_signif)
+limma_stats <- calculate_statistics(tbl_limma)
+knitr::kable(limma_stats)
+```
+
+### PhenoPath
+
+```{r fdr-phenopath}
+tbl_phenopath <- table(pp_df$beta != 0, pp_df$pp_signif)
+phenopath_stats <- calculate_statistics(tbl_phenopath)
+knitr::kable(phenopath_stats)
+```
+
+# Save figures for paper
+
+## Figure for supplementary
+
+```{r supplementary-figure}
+comp_plot <- plot_grid(pc1_plot, z_plot, rel_widths = c(6,5))
+
+comp_plot_2 <- plot_grid(NULL, comp_plot, NULL, rel_heights = c(1,5,1),
+                         labels = c("B", "", ""), ncol = 1)
+
+left_grid <- plot_grid(pca_plot, comp_plot_2, ncol = 1, labels = c("A", ""))
+right_grid <- plot_grid(limma_plot, phenopath_plot, ncol = 1,
+                        labels = c("C", "D"))
+
+plot_grid(left_grid, right_grid, nrow = 1)
+ggsave("../../figs/simulations_all.png", width = 11, height = 8)
+```
+
+## Subfigure of main text
+
+```{r simulation-all-plot}
+plot_grid(limma_plot, phenopath_plot, nrow = 1)
+
+ggsave("../../figs/simulations.png", width = 11.1, height = 3)
+```
