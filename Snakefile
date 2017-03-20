@@ -139,14 +139,15 @@ rule all:
 #     shell:
 #         "Rscript {R_opts} scripts/BRCA/0_brca_to_sceset.R"
 #
-# rule prepare_brca:
-#     input:
-#         "data/BRCA/sce_brca.rds"
-#     output:
-#         "data/BRCA/sce_brca_clvm.rds",
-#         "data/BRCA/sce_brca_gene_level.rds"
-#     shell:
-#         "Rscript -e \"rmarkdown::render('analysis/BRCA/prepare_for_clvm.Rmd')\""
+rule prepare_brca:
+    input:
+        "data/BRCA/sce_brca.rds"
+    output:
+        "data/BRCA/sce_brca_clvm.rds",
+        "data/BRCA/sce_brca_gene_level.rds",
+	"data/BRCA/brca_pca_plot.rds"
+    shell:
+        "Rscript -e \"rmarkdown::render('analysis/BRCA/prepare_for_clvm.Rmd')\""
 #
 #
 # rule brca_clvm:
@@ -215,8 +216,6 @@ rule shalek_analysis:
     input:
         "data/shalek/clvm_results.rds"
     output:
-        "figs/shalek.png",
-        "figs/s_compare_monocle_dpt.png",
         "figs/shalek.png",
         "figs/s_compare_monocle_dpt.png"
     shell:
