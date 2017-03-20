@@ -50,7 +50,7 @@ sc$x <- scale_vec( sc$stimulant == "LPS" )
 Regress out technical effect:
 
 ```{r regress-out-technical}
-pc1 <- prcomp(t(exprs(sce)), scale = TRUE)$x[,1]
+pc1 <- prcomp(t(exprs(sc)), scale = TRUE)$x[,1]
 sc$pc1 <- pc1
 m <- model.matrix(~ pc1)
 sc <- normaliseExprs(sc, design = m)
