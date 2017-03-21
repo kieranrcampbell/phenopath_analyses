@@ -321,7 +321,7 @@ filter(gos, type == "Up-regulated") %>%
     coord_flip() +
     theme(axis.title.y = element_blank(), legend.position = "none") +
     # scale_color_brewer(palette = "Set1") +
-    ylab(expression(paste(log[10], " q-value"))) +
+    ylab(expression(paste("-", log[10], " q-value"))) +
     theme(#legend.position = c(-.2, -.14), legend.direction = "horizontal",
       legend.position = c(0, 0), legend.direction = "horizontal",
         axis.text = element_text(size = 8),
@@ -551,7 +551,49 @@ filter(df_beta, is_sig) %>%
 ggsave("../../figs/supplementary_crossover.png", width = 6, height = 5)
 ```
 
+Crossover plots:
 
+```{r crossover-gene-plots}
+tmap <- pcavi$m_t
+
+cross_df <- dplyr::select(df_beta, gene, crossover, hgnc_symbol)
+
+top_genes <- dplyr::filter(df_beta, is_sig) %>% 
+  arrange(desc(abs(beta))) %>% 
+  extract2("gene") %>% head(n=20)
+
+df_gex <- t(exprs(sce))[, top_genes, drop=FALSE] %>% 
+  as_data_frame() %>% 
+  dplyr::mutate(phenotime = tmap, x = as.character(x)) %>% 
+  gather(gene, expression, -phenotime, -x)
+
+df_gex$x[is.na(df_gex$x)] <- "NA"
+df_gex$x <- plyr::mapvalues(df_gex$x, from = sort(unique(df_gex$x)), to = c("ER negative", "ER positive"))
+
+df_gex$x <- factor(df_gex$x, levels = c("ER negative", "ER positive"))
+
+df_gex <- inner_join(df_gex, cross_df, by = "gene")
+
+ggplot(df_gex, aes(x = phenotime, y = expression, color = x)) + 
+  geom_point(alpha = 0.1) +
+  facet_wrap(~ hgnc_symbol, scales = "free_y") + 
+  theme(legend.position = "top", strip.text.x = element_text(size = 9)) +
+  stat_smooth(se = FALSE, method = "lm", size = 2) + 
+  scale_color_brewer(name = "ER_status", palette = 'Set1') +
+  geom_vline(aes(xintercept = crossover), linetype = 2) +
+  xlab("z")
+
+ggsave("../../figs/supplementary_crossover_2.png", width = 10, height = 9)
+```
+
+Save df_beta:
+
+```{r save-df-beta}
+filter(df_beta, is_sig) %>% 
+  write_csv("../../data/BRCA/brca_interactions.csv")
+```
+
+# Plots for paper
 
 ```{r more-vis}
 textinfo <- frame_data(
@@ -573,7 +615,8 @@ ggplot(df_beta, aes(x = c, y = beta, color = is_sig_graph)) +
   geom_text_repel(data = filter(df_beta, is_sig, abs(beta) > 1.2),
                   aes(label = hgnc_symbol), color = 'black', 
                   size = 2.5) +
-  ylab(expression(beta)) +
+  ylab("Covariate pathway interaction") +
+  xlab("Pathway loading") +
   theme(legend.position = 'bottom',
         axis.text = element_text(size = 10),
         axis.title = element_text(size = 11),
@@ -619,7 +662,7 @@ make_gene_plot <- function(genes) {
     stat_smooth(se = FALSE, method = "lm", size = 1.5, formula = y ~ ns(x,3),
                 color = 'grey30') +
     ylab(expression(Expression ~ log[2] ~ "(TPM + 1)")) + 
-    xlab("z (vascular development)")
+    xlab("Pathway score (vascular development)")
 }
 
 genes <- c("FBP1", "RGMA")

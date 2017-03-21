@@ -50,7 +50,7 @@ sce <- sce[fData(sce)$n_cells_exprs > 0, ]
 sce <- plotPCA(sce, ncomponents = 3, colour_by = "short_plate",
                return_SCESet = TRUE)
 pca_plot <- last_plot()
-saveRDS(pca_plot, file = "../../figs/coad/pca.rds")
+saveRDS(pca_plot, file = "../../data/COAD/coad_pca_plot.rds")
 ```
 
 We see technically distinct clusters of cells. We want to target the largest, so strip out those that aren't there:

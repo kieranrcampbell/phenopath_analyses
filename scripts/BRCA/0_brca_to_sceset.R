@@ -2,6 +2,14 @@ library(scater)
 library(tidyverse)
 library(magrittr)
 
+sanitize_names <- function(n) {
+  n <- gsub("(", "", n, fixed = TRUE)
+  n <- gsub(")", "", n, fixed =  TRUE)
+  n <- gsub(" ", "_", n, fixed = TRUE)
+  n <- gsub("-", "_", n, fixed  =TRUE)
+  n
+}
+
 
 library(RTCGA.clinical)
 data("BRCA.clinical")
@@ -53,6 +61,20 @@ brca_clinical <- BRCA.clinical %>%
          ER_status = patient.breast_carcinoma_estrogen_receptor_status,
          PR_status = patient.breast_carcinoma_progesterone_receptor_status) %>% 
   mutate(censored = is.na(patient.days_to_death))
+
+## Add in HER2 and survival info
+brca_clin_from_cbio <- read_tsv("data/BRCA/brca_tcga_clinical_data.tsv")
+names(brca_clin_from_cbio) <- sapply(names(brca_clin_from_cbio), sanitize_names)
+brca_clin_from_cbio <- select(brca_clin_from_cbio,
+                              Disease_Free_Months, IHC_HER2, Overall_Survival_Months,
+                              Patient_ID) %>% 
+  mutate(patient_barcode = tolower(Patient_ID))
+
+## Strip out duplicates
+mm <- match(unique(brca_clin_from_cbio$patient_barcode), brca_clin_from_cbio$patient_barcode)
+brca_clin_from_cbio <- brca_clin_from_cbio[mm, ]
+
+brca_clinical %<>% inner_join(brca_clin_from_cbio, by = "patient_barcode")
 
 brca_clinical %<>% inner_join(select(id_map, patient_barcode, CGHubAnalysisID, AliquotBarcode),
                             by = c("patient_barcode"))

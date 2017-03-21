@@ -44,8 +44,12 @@ rule all:
         # "data/shalek/sce_shalek.rds",
 	    # "data/shalek/sce_shalek_clvm.rds",
         # "data/shalek/clvm_results.rds",
-        # plot_files_coad,
-        # plot_files_brca,
+        plot_files_coad,
+        plot_files_brca,
+        "figs/supplementary_crossover.png",
+        "figs/supplementary_crossover_2.png",
+        "data/BRCA/brca_interactions.csv",
+        "data/COAD/coad_interactions.csv",
         fasta_files,
         fastq_str1, fastq_str2,
         kallisto_quants,
@@ -53,7 +57,8 @@ rule all:
         "figs/shalek.png",
         "figs/s_compare_monocle_dpt.png",
         "figs/shalek.png",
-        "figs/s_compare_monocle_dpt.png"
+        "figs/s_compare_monocle_dpt.png",
+        "figs/cancer_figure.png"
 
 
 ## ------ COAD -----
@@ -91,15 +96,16 @@ rule all:
 #         "data/COAD/clvm_results.rds"
 #     shell:
 #         "Rscript scripts/run_cavi.R {input} {output} 1"
-#
-# rule coad_analysis:
-#     input:
-#         "data/COAD/clvm_results.rds",
-#         "data/COAD/sce_coad_clvm.rds"
-#     output:
-#         plot_files_coad
-#     shell:
-#         "Rscript -e \"rmarkdown::render('analysis/COAD/clvm_analysis.Rmd')\""
+
+rule coad_analysis:
+    input:
+        "data/COAD/clvm_results.rds",
+        "data/COAD/sce_coad_clvm.rds"
+    output:
+        plot_files_coad,
+        "data/COAD/coad_interactions.csv"
+    shell:
+        "Rscript -e \"rmarkdown::render('analysis/COAD/clvm_analysis.Rmd')\""
 #
 # ## ---- OV ----
 #
@@ -139,15 +145,15 @@ rule all:
 #     shell:
 #         "Rscript {R_opts} scripts/BRCA/0_brca_to_sceset.R"
 #
-rule prepare_brca:
-    input:
-        "data/BRCA/sce_brca.rds"
-    output:
-        "data/BRCA/sce_brca_clvm.rds",
-        "data/BRCA/sce_brca_gene_level.rds",
-	"data/BRCA/brca_pca_plot.rds"
-    shell:
-        "Rscript -e \"rmarkdown::render('analysis/BRCA/prepare_for_clvm.Rmd')\""
+# rule prepare_brca:
+#     input:
+#         "data/BRCA/sce_brca.rds"
+#     output:
+#         "data/BRCA/sce_brca_clvm.rds",
+#         "data/BRCA/sce_brca_gene_level.rds",
+# 	"data/BRCA/brca_pca_plot.rds"
+#     shell:
+#         "Rscript -e \"rmarkdown::render('analysis/BRCA/prepare_for_clvm.Rmd')\""
 #
 #
 # rule brca_clvm:
@@ -166,14 +172,17 @@ rule prepare_brca:
 #     shell:
 #         "Rscript scripts/find_expressed_genes.R {input} {output}"
 #
-# rule brca_analysis:
-#     input:
-#         "data/BRCA/clvm_results.rds",
-#         "data/BRCA/sce_brca_clvm.rds"
-#     output:
-#         plot_files_brca
-#     shell:
-#         "Rscript -e \"rmarkdown::render('analysis/BRCA/clvm_analysis.Rmd')\""
+rule brca_analysis:
+    input:
+        "data/BRCA/clvm_results.rds",
+        "data/BRCA/sce_brca_clvm.rds"
+    output:
+        plot_files_brca,
+        "figs/supplementary_crossover.png",
+        "figs/supplementary_crossover_2.png",
+        "data/BRCA/brca_interactions.csv"
+    shell:
+        "Rscript -e \"rmarkdown::render('analysis/BRCA/clvm_analysis.Rmd')\""
 #
 #
 # ## ---- Shalek ----
