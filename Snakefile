@@ -185,6 +185,18 @@ rule brca_analysis:
         "data/BRCA/brca_interactions.csv"
     shell:
         "Rscript -e \"rmarkdown::render('analysis/BRCA/clvm_analysis.Rmd')\""
+
+rule brca_threecov_clvm:
+    input:
+        "data/BRCA/sce_brca_clvm.rds"
+    output:
+        "data/BRCA/clvm_results_threecov.rds"
+    shell:
+        "Rscript scripts/BRCA/1_brca_three_covariate_clvm.R {input} {output}"
+
+
+
+
 #
 #
 # ## ---- Shalek ----
