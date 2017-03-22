@@ -133,27 +133,29 @@ rule coad_analysis:
 #         "data/OV/clvm_results.rds"
 #     shell:
 #         "Rscript scripts/run_cavi.R {input} {output} 1"
-#
+
 # ## ---- BRCA ----
-#
-# rule construct_scebrca:
-#     input:
-#         "data/BRCA/TCGA_BRCA_tpm.tsv.gz",
-#         "data/BRCA/TCGA_BRCA_counts.tsv.gz"
-#     output:
-#         "data/BRCA/sce_brca.rds"
-#     shell:
-#         "Rscript {R_opts} scripts/BRCA/0_brca_to_sceset.R"
-#
-# rule prepare_brca:
-#     input:
-#         "data/BRCA/sce_brca.rds"
-#     output:
-#         "data/BRCA/sce_brca_clvm.rds",
-#         "data/BRCA/sce_brca_gene_level.rds",
-# 	"data/BRCA/brca_pca_plot.rds"
-#     shell:
-#         "Rscript -e \"rmarkdown::render('analysis/BRCA/prepare_for_clvm.Rmd')\""
+
+rule construct_scebrca:
+    input:
+        "data/BRCA/TCGA_BRCA_tpm.tsv.gz",
+        "data/BRCA/TCGA_BRCA_counts.tsv.gz",
+	"data/BRCA/brca_tcga_clinical_data.tsv",
+	"data/BRCA/supplementary.xls"
+    output:
+        "data/BRCA/sce_brca.rds"
+    shell:
+        "Rscript {R_opts} scripts/BRCA/0_brca_to_sceset.R"
+
+rule prepare_brca:
+    input:
+        "data/BRCA/sce_brca.rds"
+    output:
+        "data/BRCA/sce_brca_clvm.rds",
+        "data/BRCA/sce_brca_gene_level.rds",
+	"data/BRCA/brca_pca_plot.rds"
+    shell:
+        "Rscript -e \"rmarkdown::render('analysis/BRCA/prepare_for_clvm.Rmd')\""
 #
 #
 # rule brca_clvm:

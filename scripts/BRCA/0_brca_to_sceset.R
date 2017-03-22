@@ -140,18 +140,18 @@ pData(sce) <- cbind(pData(sce), dplyr::select(pdata_df, n_mutations, n_somatic, 
 
 # Add in phenotypic data --------------------------------------------------
 
-library(readxl)
-xl <- read_excel("../../data/BRCA/supplementary.xls", skip = 1)
-xl$patient_barcode <- tolower(xl$`Complete TCGA ID`)
-names(xl) <- sapply(names(xl), function(n) gsub(" ", "_", n))
-xl <- dplyr::select(xl, patient_barcode, HER2_Final_Status,
-                    Tumor, Node, Metastasis, AJCC_Stage, PAM50_mRNA, 
-                    RPPA_Clusters, Days_to_date_of_Death)
+# library(readxl)
+# xl <- read_excel("data/BRCA/supplementary.xls", skip = 1)
+# xl$patient_barcode <- tolower(xl$`Complete TCGA ID`)
+# names(xl) <- sapply(names(xl), function(n) gsub(" ", "_", n))
+# xl <- dplyr::select(xl, patient_barcode, HER2_Final_Status,
+#                     Tumor, Node, Metastasis, AJCC_Stage, PAM50_mRNA, 
+#                     RPPA_Clusters, Days_to_date_of_Death)
 
-pdata_df <- pData(sce)
-pd <- left_join(pdata_df, xl, by = "patient_barcode")
+# pdata_df <- pData(sce)
+# pd <- left_join(pdata_df, xl, by = "patient_barcode")
 
-stopifnot(all.equal(sce$patient_barcode, pd$patient_barcode))
-pData(sce) <- pd
+# stopifnot(all.equal(sce$patient_barcode, pd$patient_barcode))
+# pData(sce) <- pd
 
 saveRDS(sce, file = "data/BRCA/sce_brca.rds")
