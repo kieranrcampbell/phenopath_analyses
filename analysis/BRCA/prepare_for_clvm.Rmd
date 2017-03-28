@@ -163,11 +163,29 @@ sce <- sce[, status_defined]
 sce_gene <- sce_gene[, status_defined]
 ```
 
+# Triple negative vs rest
 
+```{r trip-neg}
+
+is_triple_neg <- sce$ER_status == "negative" & sce$PR_status == "negative" &
+  sce$IHC_HER2 == "Negative"
+
+is_triple_neg[is.na(is_triple_neg)] <- FALSE
+
+sce$is_triple_neg <- scale_vec(1 * is_triple_neg)
+```
+
+```{r er-pos}
+sce@logged <- TRUE
+sce@useForExprs <- "exprs"
+sce_er_pos <- sce[, sce$ER_status == "positive"]
+sce_er_pos$x <- scale_vec(sce_er_pos$PR_status == "positive")
+```
 
 And save the result:
 
 ```{r save-tumour-gene}
 saveRDS(sce, file = "../../data/BRCA/sce_brca_clvm.rds")
+saveRDS(sce_er_pos, file = "../../data/BRCA/sce_brca_clvm_er_pos.rds")
 saveRDS(sce_gene, file = "../../data/BRCA/sce_brca_gene_level.rds")
 ```

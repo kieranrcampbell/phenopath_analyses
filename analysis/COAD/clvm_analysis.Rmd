@@ -139,7 +139,7 @@ t(exprs(sce))[, top_genes] %>%
   facet_wrap(~ gene, scales = "free_y") + 
   scale_color_brewer(palette = "Set1", name = "MSI") +
   theme(legend.position = "top", strip.text.x = element_text(size = 9)) +
-  stat_smooth(se = FALSE, method = "lm", size = 2, formula = y ~ ns(x,3))
+  stat_smooth(se = FALSE, method = "lm", size = 2, formula = y ~ x) # ns(x,3))
 ```
 
 
@@ -458,3 +458,34 @@ saveRDS(gene_plot, "../../figs/coad/gene_plot.rds")
 saveRDS(lplot, "../../figs/coad/lplot.rds")
 ```
 
+# Cibertsort
+
+```{r csort}
+csort_raw <- read_tsv("../../data/COAD/cellTypeFractionsAll.tsv")
+
+csort <- dplyr::mutate(csort_raw, patient_barcode = tolower(patientBarcode)) %>% 
+  dplyr::select(-patientBarcode, -fair_LM22)
+
+csort_wide <- spread(csort, cell_type, cibersort_LM22)
+
+sample_names <- sce$patient_barcode
+mm <- match(sample_names, csort_wide$patient_barcode)
+csort <- csort_wide[mm, ]
+stopifnot(all.equal(sce$patient_barcode, csort$patient_barcode))
+
+tmap <- pcavi$m_t
+
+cors <- apply(as.matrix(csort[,-c(1:2)]), 2, cor, tmap, method = "spearman")
+
+cdf <- data_frame(cell_type = names(csort)[-c(1:2)],
+                  correlation_to_z = cors)
+cdf <- dplyr::arrange(cdf, correlation_to_z)
+cell_type_levels <- cdf$cell_type
+cdf$cell_type <- factor(cdf$cell_type, levels = cell_type_levels)
+
+ggplot(cdf, aes(x = cell_type, y = correlation_to_z)) +
+  geom_bar(stat = "identity") +
+  ylab("Cibertsort correlation to z") +
+  xlab("Cibertsort cell type") +
+  coord_flip()
+```

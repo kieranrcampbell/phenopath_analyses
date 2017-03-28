@@ -45,6 +45,8 @@ rule all:
 	    # "data/shalek/sce_shalek_clvm.rds",
         # "data/shalek/clvm_results.rds",
         "data/BRCA/clvm_results_threecov.rds",
+        "data/BRCA/clvm_er_pos_results.rds",
+        "data/BRCA/clvm_tripleneg_results.rds",
         plot_files_coad,
         plot_files_brca,
         "figs/supplementary_crossover.png",
@@ -153,8 +155,9 @@ rule prepare_brca:
         "data/BRCA/sce_brca.rds"
     output:
         "data/BRCA/sce_brca_clvm.rds",
+        "data/BRCA/sce_brca_clvm_er_pos.rds",
         "data/BRCA/sce_brca_gene_level.rds",
-	"data/BRCA/brca_pca_plot.rds"
+        "data/BRCA/brca_pca_plot.rds"
     shell:
         "Rscript -e \"rmarkdown::render('analysis/BRCA/prepare_for_clvm.Rmd')\""
 #
@@ -166,6 +169,23 @@ rule prepare_brca:
 #         "data/BRCA/clvm_results.rds"
 #     shell:
 #         "Rscript scripts/run_cavi.R {input} {output} 1"
+
+rule brca_clvm_tripleneg:
+    input:
+        "data/BRCA/sce_brca_clvm.rds"
+    output:
+        "data/BRCA/clvm_tripleneg_results.rds"
+    shell:
+        "Rscript scripts/run_cavi.R {input} {output} 1 is_triple_neg"
+
+rule brca_clvm_er_pos:
+    input:
+        "data/BRCA/sce_brca_clvm_er_pos.rds"
+    output:
+        "data/BRCA/clvm_er_pos_results.rds"
+    shell:
+        "Rscript scripts/run_cavi.R {input} {output} 1"
+
 #
 # rule brca_expressed_genes:
 #     input:
