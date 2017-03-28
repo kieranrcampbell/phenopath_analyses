@@ -74,7 +74,7 @@ df_beta <- data_frame(
   alpha_msi = pcavi$m_alpha[1,],
   gene = featureNames(sce),
   is_mmr = fData(sce)$is_mmr,
-  is_sig = significant_interactions(pcavi, n = 3),
+  is_sig = as.vector(significant_interactions(pcavi, n = 3)),
   hgnc_symbol = fData(sce)$hgnc_symbol,
   ensembl_gene_id = fData(sce)$ensembl_gene_id
 )

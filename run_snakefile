@@ -1,1 +1,1 @@
-snakemake --jobs 240 --cluster "qsub -N phenotime -P webber.prjc -q short.qc -o logs -e logs -cwd -V -pe shmem 2" 
+snakemake --jobs 240 --cluster "qsub -N phenotime -P webber.prjc -q short.qc -o logs -e logs -cwd -V -pe shmem 4" 

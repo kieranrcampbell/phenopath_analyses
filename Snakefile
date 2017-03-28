@@ -53,14 +53,14 @@ rule all:
         "figs/supplementary_crossover_2.png",
         "data/BRCA/brca_interactions.csv",
         "data/COAD/coad_interactions.csv",
-        fasta_files,
-        fastq_str1, fastq_str2,
-        kallisto_quants,
-        "analysis/simulations/simulations.html",
-        "figs/shalek.png",
-        "figs/s_compare_monocle_dpt.png",
-        "figs/shalek.png",
-        "figs/s_compare_monocle_dpt.png",
+        # fasta_files,
+        # fastq_str1, fastq_str2,
+        # kallisto_quants,
+        # "analysis/simulations/simulations.html",
+        # "figs/shalek.png",
+        # "figs/s_compare_monocle_dpt.png",
+        # "figs/shalek.png",
+        # "figs/s_compare_monocle_dpt.png",
         "figs/cancer_figure.png"
 
 
@@ -256,14 +256,14 @@ rule prepare_shalek:
     shell:
         "Rscript -e \"rmarkdown::render('analysis/shalek/prepare_for_clvm.Rmd')\""
 
-rule shalek_analysis:
-    input:
-        "data/shalek/clvm_results.rds"
-    output:
-        "figs/shalek.png",
-        "figs/s_compare_monocle_dpt.png"
-    shell:
-        "Rscript -e \"rmarkdown::render('analysis/shalek/shalek_clvm_analysis.Rmd')\""
+# rule shalek_analysis:
+#     input:
+#         "data/shalek/clvm_results.rds"
+#     output:
+#         "figs/shalek.png",
+#         "figs/s_compare_monocle_dpt.png"
+#     shell:
+#         "Rscript -e \"rmarkdown::render('analysis/shalek/shalek_clvm_analysis.Rmd')\""
 
 ## ---- Overall cancer figure
 
@@ -283,54 +283,54 @@ rule cancer_figure:
 # fastq_files = ['data/simulations/fasta/sample_' + str(i + 1) + "_" + str(j + 1) + ".fasta" for i in range(N) for j in range(2)]
 
 
-rule simulate_fasta:
-    output:
-        "data/simulations/ref/chr22_small.fa",
-        "data/simulations/gene_pars.csv",
-        "data/simulations/pdata.csv",
-        fasta_files
-    shell:
-        "Rscript analysis/simulations/simulate_from_phenopath.R"
+# rule simulate_fasta:
+#     output:
+#         "data/simulations/ref/chr22_small.fa",
+#         "data/simulations/gene_pars.csv",
+#         "data/simulations/pdata.csv",
+#         fasta_files
+#     shell:
+#         "Rscript analysis/simulations/simulate_from_phenopath.R"
 
 
-rule fasta_to_fastq_str1:
-    input:
-        "data/simulations/fasta/sample_{sam}_1.fasta"
-    output:
-        "data/simulations/fastq/sample_{sam}_1.fastq"
-    shell:
-        "python3 scripts/fasta_to_fastq.py {input} {output}"
+# rule fasta_to_fastq_str1:
+#     input:
+#         "data/simulations/fasta/sample_{sam}_1.fasta"
+#     output:
+#         "data/simulations/fastq/sample_{sam}_1.fastq"
+#     shell:
+#         "python3 scripts/fasta_to_fastq.py {input} {output}"
 
-rule fasta_to_fastq_str2:
-    input:
-        "data/simulations/fasta/sample_{sam}_2.fasta"
-    output:
-        "data/simulations/fastq/sample_{sam}_2.fastq"
-    shell:
-        "python3 scripts/fasta_to_fastq.py {input} {output}"
+# rule fasta_to_fastq_str2:
+#     input:
+#         "data/simulations/fasta/sample_{sam}_2.fasta"
+#     output:
+#         "data/simulations/fastq/sample_{sam}_2.fastq"
+#     shell:
+#         "python3 scripts/fasta_to_fastq.py {input} {output}"
 
-rule kallisto_index:
-    input:
-        "data/simulations/ref/chr22_small.fa"
-    output:
-        "data/simulations/ref/chr22_small.idx"
-    shell:
-        "kallisto index -i {output} {input}"
+# rule kallisto_index:
+#     input:
+#         "data/simulations/ref/chr22_small.fa"
+#     output:
+#         "data/simulations/ref/chr22_small.idx"
+#     shell:
+#         "kallisto index -i {output} {input}"
 
-rule kallisto:
-    input:
-        str1="data/simulations/fastq/sample_{sam}_1.fastq",
-        str2="data/simulations/fastq/sample_{sam}_2.fastq",
-        ref="data/simulations/ref/chr22_small.idx"
-    output:
-        "data/simulations/quant/sample_{sam}/abundance.tsv"
-    shell:
-        "kallisto quant -i data/simulations/ref/chr22_small.idx -o data/simulations/quant/sample_{wildcards.sam} -b 100 {input.str1} {input.str2}"
+# rule kallisto:
+#     input:
+#         str1="data/simulations/fastq/sample_{sam}_1.fastq",
+#         str2="data/simulations/fastq/sample_{sam}_2.fastq",
+#         ref="data/simulations/ref/chr22_small.idx"
+#     output:
+#         "data/simulations/quant/sample_{sam}/abundance.tsv"
+#     shell:
+#         "kallisto quant -i data/simulations/ref/chr22_small.idx -o data/simulations/quant/sample_{wildcards.sam} -b 100 {input.str1} {input.str2}"
 
-rule simulations_rmd:
-    input:
-        kallisto_quants
-    output:
-        "analysis/simulations/simulations.html"
-    shell:
-        "Rscript -e \"rmarkdown::render('analysis/simulations/simulations.Rmd')\""
+# rule simulations_rmd:
+#     input:
+#         kallisto_quants
+#     output:
+#         "analysis/simulations/simulations.html"
+#     shell:
+#         "Rscript -e \"rmarkdown::render('analysis/simulations/simulations.Rmd')\""

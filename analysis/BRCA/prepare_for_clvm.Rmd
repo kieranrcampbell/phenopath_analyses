@@ -176,8 +176,8 @@ sce$is_triple_neg <- scale_vec(1 * is_triple_neg)
 ```
 
 ```{r er-pos}
-sce@logged <- TRUE
-sce@useForExprs <- "exprs"
+# sce@logged <- TRUE
+# sce@useForExprs <- "exprs"
 sce_er_pos <- sce[, sce$ER_status == "positive"]
 sce_er_pos$x <- scale_vec(sce_er_pos$PR_status == "positive")
 ```
