@@ -80,7 +80,7 @@ df_beta <- data_frame(
   chi = pcavi$chi_exp[1,],
   alpha = pcavi$m_alpha[1,],
   gene = featureNames(sce),
-  is_sig = significant_interactions(pcavi, n = 3),
+  is_sig = as.vector(significant_interactions(pcavi, n = 3)),
   hgnc_symbol = fData(sce)$hgnc_symbol,
   ensembl_gene_id = fData(sce)$ensembl_gene_id
 )
@@ -549,6 +549,28 @@ filter(df_beta, is_sig) %>%
   xlab("Convergence point")
 
 ggsave("../../figs/supplementary_crossover.png", width = 6, height = 5)
+```
+
+Crossover GO analysis:
+
+```{r crossover-go}
+library(goseq)
+genome <- "hg19"
+id <- "ensGene"
+
+all_genes <- fData(sce)$ensembl_gene_id
+
+crossover_genes <- filter(df_beta, 
+                          is_sig & crossover > 0.4) %>% 
+  extract2("ensembl_gene_id") 
+
+crossg <- 1 * (all_genes %in% crossover_genes)
+names(crossg) <- all_genes
+
+pwfcross <- nullp(crossg, genome, id)
+gocross <- goseq(pwfcross, genome, id, test.cats = "GO:BP")
+
+pgo <- parse_go(gocross, "crossover", length(all_genes))
 ```
 
 Crossover plots:

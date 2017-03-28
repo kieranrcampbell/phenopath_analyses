@@ -138,6 +138,24 @@ stopifnot(all.equal(sce$patient_barcode, pdata_df$patient_barcode))
 pData(sce) <- cbind(pData(sce), dplyr::select(pdata_df, n_mutations, n_somatic, n_unknown))
 
 
+# Add in HER2 and survival ------------------------------------------------
+
+brca_clin_from_cbio <- read_tsv("data/BRCA/brca_tcga_clinical_data.tsv")
+names(brca_clin_from_cbio) <- sapply(names(brca_clin_from_cbio), sanitize_names)
+brca_clin_from_cbio <- select(brca_clin_from_cbio,
+                              Disease_Free_Months, IHC_HER2, Overall_Survival_Months,
+                              Patient_ID, Overall_Survival_Status) %>% 
+  dplyr::mutate(patient_barcode = tolower(Patient_ID))
+
+## Strip out duplicates
+mm <- match(unique(brca_clin_from_cbio$patient_barcode), brca_clin_from_cbio$patient_barcode)
+brca_clin_from_cbio <- brca_clin_from_cbio[mm, ]
+
+brca_clinical <- inner_join(pData(sce), brca_clin_from_cbio, by = "patient_barcode")
+stopifnot(all.equal(brca_clinical$patient_barcode, sce$patient_barcode))
+pData(sce) <- brca_clinical
+
+
 # Add in phenotypic data --------------------------------------------------
 
 # library(readxl)
