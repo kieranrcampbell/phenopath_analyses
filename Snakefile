@@ -44,6 +44,7 @@ rule all:
         # "data/shalek/sce_shalek.rds",
 	    # "data/shalek/sce_shalek_clvm.rds",
         # "data/shalek/clvm_results.rds",
+        "data/BRCA/clvm_results_threecov.rds",
         plot_files_coad,
         plot_files_brca,
         "figs/supplementary_crossover.png",
