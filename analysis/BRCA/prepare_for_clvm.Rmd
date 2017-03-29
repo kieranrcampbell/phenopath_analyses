@@ -22,7 +22,7 @@ scale_vec <- function(x) (x - mean(x)) / sd(x)
 
 ```{r data-prep, cache = FALSE}
 sce <- readRDS("../../data/BRCA/sce_brca.rds")
-# sampleNames(sce) <- sampleNames(assayData(sce))
+sampleNames(sce) <- sampleNames(assayData(sce))
 sce <- sce[matrixStats::rowVars(exprs(sce)) > 0, ]
 is_exprs(sce) <- exprs(sce) > 0
 sce <- calculateQCMetrics(sce)
