@@ -3,38 +3,77 @@ library(cowplot)
 library(splines)
 
 
-plot_paper_grid <- function(limma_plot, goplot, gene_plot, lplot,
-                            A = "A", B = "B", C = "C", D = "D") {
-  lsize <- 11
-  bottom_left <- plot_grid(plot_grid(NULL, limma_plot, NULL, nrow = 1, rel_widths = c(1,6, 1)), 
-                           goplot,
-                           ncol = 1, labels = c(B, C),
-                           label_size = lsize)
-  bottom_grid <- plot_grid(bottom_left, gene_plot, nrow = 1, labels = c("", D),
-                           label_size = lsize)
+brca_limma_plot <- readRDS("figs/brca/limma_plot.rds")
+brca_goplot <- readRDS("figs/brca/goplot.rds")
+brca_gene_plot <- readRDS("figs/brca/gene_plot.rds")
+brca_lplot <- readRDS("figs/brca/lplot.rds")
+brca_crossplot <- readRDS("figs/brca/cross_plot.rds")
+
+## Reduce font size of cross plot
+brca_crossplot <- brca_crossplot + 
+  theme(legend.position = "none", strip.text.x = element_text(size = 9),
+      axis.title = element_text(size = 10),
+      axis.text = element_text(size = 9),
+      plot.title = element_text(size = 11))
   
-  p <- plot_grid(lplot, bottom_grid, ncol = 1, 
-                 rel_heights = c(2,1.2), labels = c(A,""),
-                 label_size = lsize)
-}
+
+lsize <- 11
+top_right <- plot_grid(plot_grid(NULL, brca_limma_plot, NULL, nrow = 1, rel_widths = c(1,6, 1)), 
+                       brca_goplot, brca_crossplot,
+                       ncol = 1, labels = c("B", "C", "D"),
+                       label_size = lsize)
+
+top_grid <- plot_grid(brca_lplot, top_right, ncol = 2, 
+                      labels = c("A", ""), label_size = lsize,
+                      rel_widths = c(2,1))
+
+gene_grid <- plot_grid(NULL, brca_gene_plot, NULL, rel_widths = c(1,8,1), nrow = 1,
+                       labels = c("", "E", ""), label_size = lsize)
+
+p <- plot_grid(top_grid, gene_grid, 
+               rel_heights = c(2,1), label_size = lsize, ncol = 1)
+
+ggsave("figs/brca_figure.png", p, width = 11, height = 9)
+
+
+
+# Extra figure for thesis -------------------------------------------------
+
+crossover_thesis <- readRDS("figs/brca/crossover_thesis.rds")
+
+crossover_thesis <- crossover_thesis + 
+  theme(legend.position = "none", strip.text.x = element_text(size = 9),
+        axis.title = element_text(size = 10),
+        axis.text = element_text(size = 9),
+        plot.title = element_text(size = 11))
+
+plot_grid(plot_grid(NULL, brca_crossplot, NULL, rel_widths = c(1,6,1),
+                    labels = c("", "A", ""), nrow = 1, label_size = lsize),
+          crossover_thesis, labels = c("", "B"),
+          ncol = 1, label_size = lsize, rel_heights = c(1,3))
+
+ggsave("figs/brca/crossover_thesis.png", width = 6, height = 10)
+
+
+# Reformatted COAD plot ---------------------------------------------------
+
 
 coad_limma_plot <- readRDS("figs/coad/limma_plot.rds")
 coad_goplot <- readRDS("figs/coad/goplot.rds")
 coad_gene_plot <- readRDS("figs/coad/gene_plot.rds")
 coad_lplot <- readRDS("figs/coad/lplot.rds")
+coad_tregs <- readRDS("figs/coad/tregs.rds")
 
-brca_limma_plot <- readRDS("figs/brca/limma_plot.rds")
-brca_goplot <- readRDS("figs/brca/goplot.rds")
-brca_gene_plot <- readRDS("figs/brca/gene_plot.rds")
-brca_lplot <- readRDS("figs/brca/lplot.rds")
+upper_grid <- plot_grid(coad_lplot, coad_tregs, 
+                        labels = c("A", "B"), nrow = 1, label_size = lsize,
+                        rel_widths = c(3,1))
 
-coad_plot <- plot_paper_grid(coad_limma_plot, coad_goplot, coad_gene_plot, coad_lplot)
-brca_plot <- plot_paper_grid(brca_limma_plot, brca_goplot, brca_gene_plot, brca_lplot,
-                             "E", "F", "G", "H")
+bottom_grid <- plot_grid(coad_limma_plot, 
+                         plot_grid(NULL, coad_goplot, NULL, rel_heights = c(1,6,1), ncol = 1), 
+                         coad_gene_plot, nrow = 1,
+                         label_size = lsize, labels = c("C", "D", "E"), 
+                         rel_widths = c(2,3,2))
 
-coad_plot <- coad_plot + ggtitle("Colorectal cancer") + panel_border()
-brca_plot <- brca_plot + ggtitle("Breast cancer") + panel_border()
+pc <- plot_grid(upper_grid, bottom_grid, ncol = 1, rel_heights = c(5,2.5))
 
-cancer_plot <- plot_grid(coad_plot, brca_plot, nrow = 1)
-
-ggsave("figs/cancer_figure.png", cancer_plot, width = 16, height = 10)
+ggsave("figs/coad_figure.png", pc, width = 11, height = 9)

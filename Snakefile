@@ -6,8 +6,10 @@ Notes:
     - Data downloaded from https://osf.io/gqrz9/
     - If pandoc gives an error, open Rstudio, type "sys.getenv("RSTUDIO_PANDOC")"
     and append the value to the $PATH environment variable
+    e.g.
+    export PATH=$PATH:/Applications/RStudio.app/Contents/MacOS/pandoc
 
-Kieran R Campbell, February-March 2017
+Kieran R Campbell, February-May 2017
 """
 
 R_opts = "--vanilla"
@@ -16,6 +18,9 @@ plot_names = ['limma_plot', 'goplot', 'gene_plot', 'lplot']
 plot_files = [p + ".rds" for p in plot_names]
 plot_files_coad = ["figs/coad/" + pf for pf in plot_files]
 plot_files_brca = ["figs/brca/" + pf for pf in plot_files]
+plot_files_brca.append("figs/brca/cross_plot.rds")
+plot_files_brca.append("figs/brca/crossover_thesis.rds")
+plot_files_coad.append("figs/coad/tregs.rds")
 
 
 N = 200
@@ -47,6 +52,7 @@ rule all:
         "data/BRCA/clvm_results_threecov.rds",
         "data/BRCA/clvm_er_pos_results.rds",
         "data/BRCA/clvm_tripleneg_results.rds",
+        "analysis/BRCA/clvm_analysis_tripleneg.html",
         # plot_files_coad,
         plot_files_brca,
         "figs/supplementary_crossover.png",
@@ -61,7 +67,9 @@ rule all:
         # "figs/s_compare_monocle_dpt.png",
         # "figs/shalek.png",
         # "figs/s_compare_monocle_dpt.png",
-        # "figs/cancer_figure.png"
+        "figs/coad_figure.png",
+        "figs/brca_figure.png",
+        "figs/brca/crossover_thesis.png"
 
 
 ## ------ COAD -----
@@ -207,6 +215,24 @@ rule brca_analysis:
     shell:
         "Rscript -e \"rmarkdown::render('analysis/BRCA/clvm_analysis.Rmd')\""
 
+rule brca_tripleneg_analysis:
+    input:
+        "data/BRCA/clvm_tripleneg_results.rds",
+        "data/BRCA/sce_brca_clvm.rds"
+    output:
+        "analysis/BRCA/clvm_analysis_tripleneg.html",
+        "figs/tripleneg/gene_plot.rds"
+    shell:
+        "Rscript -e \"rmarkdown::render('analysis/BRCA/clvm_analysis_tripleneg.Rmd')\""
+
+rule brca_tripleneg_figure:
+    input:
+        "figs/tripleneg/gene_plot.rds",
+    output:
+        "figs/triple_neg_figure.png"
+    shell:
+        "Rscript scripts/BRCA/2_make_tripleneg_figure.R"
+
 rule brca_threecov_clvm:
     input:
         "data/BRCA/sce_brca_clvm.rds"
@@ -271,7 +297,9 @@ rule cancer_figure:
     input:
         plot_files_coad, plot_files_brca
     output:
-        "figs/cancer_figure.png"
+        "figs/brca_figure.png",
+        "figs/coad_figure.png",
+        "figs/brca/crossover_thesis.png"
     shell:
         "Rscript scripts/cancer_figure.R"
 
@@ -327,10 +355,10 @@ rule cancer_figure:
 #     shell:
 #         "kallisto quant -i data/simulations/ref/chr22_small.idx -o data/simulations/quant/sample_{wildcards.sam} -b 100 {input.str1} {input.str2}"
 
-# rule simulations_rmd:
-#     input:
-#         kallisto_quants
-#     output:
-#         "analysis/simulations/simulations.html"
-#     shell:
-#         "Rscript -e \"rmarkdown::render('analysis/simulations/simulations.Rmd')\""
+rule simulations_rmd:
+    input:
+        kallisto_quants
+    output:
+        "analysis/simulations/simulations.html"
+    shell:
+        "Rscript -e \"rmarkdown::render('analysis/simulations/simulations.Rmd')\""

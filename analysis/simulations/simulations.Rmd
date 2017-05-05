@@ -19,6 +19,7 @@ library(cowplot)
 library(viridis)
 library(readr)
 library(dplyr)
+library(splines)
 
 
 set.seed(123L)
@@ -46,7 +47,7 @@ pdata <- read_csv("../../data/simulations/pdata.csv")
 
 sce$sample_index <- as.numeric(sampleNames(sce))
 mm <- match(sce$sample_index, pdata$sample)
-pdata <- pdata[mm, ]
+pdata <- pdata[mm, ]  
 pData(sce) <- cbind(pData(sce), pdata)
 
 sce <- plotPCA(sce, colour_by = "x", ncomponents = 3, return_SCESet = TRUE)
@@ -92,7 +93,7 @@ pc1 <- prcomp(t(exprs(sce)))$x[,1]
 pp_df <- data_frame(pp_alpha = pcavi$m_alpha[1,],
                     pp_beta = pcavi$m_beta[1,],
                     pp_c = pcavi$m_c,
-                    pp_signif = significant_interactions(pcavi, n = 2),
+                    pp_signif = as.vector(significant_interactions(pcavi, n = 2)),
                     feature = featureNames(sce),
                     alpha = fData(sce)[['alpha']],
                     beta = fData(sce)[['beta']],
@@ -150,6 +151,52 @@ ggplot(pp_df, aes(x = regime_txt, y = abs(pp_beta), color = pp_signif)) +
   theme(legend.position = "right") +
   theme(axis.text.x = element_text(size = 9))
 phenopath_plot <- last_plot()
+```
+
+## Tabular results
+
+```{r tab-results}
+pp_table <- group_by(pp_df, regime_txt) %>% 
+  summarise(n = n(), n_sig = sum(pp_signif), prop_sig = mean(pp_signif))
+
+lm_table <- group_by(pp_df, regime_txt) %>% 
+  summarise(n = n(), n_sig = sum(limma_signif), prop_sig = mean(limma_signif))
+```
+
+PhenoPath results:
+
+```{r phenopath-results}
+DT::datatable(pp_table)
+```
+
+```{r limma-results}
+DT::datatable(lm_table)
+```
+
+"Case four" overlap table for supplementary:
+
+```{r case-four}
+pp_df_4_only <- filter(pp_df, regime_txt == "Differential\nexpression, pseudotime\nand covariate interactions")
+
+overlap_df <- frame_data(
+  ~regime, ~n,
+  "both", sum(pp_df_4_only$pp_signif & pp_df_4_only$limma_signif),
+  "PhenoPath only", sum(pp_df_4_only$pp_signif & !pp_df_4_only$limma_signif),
+  "Limma only", sum(!pp_df_4_only$pp_signif & pp_df_4_only$limma_signif),
+  "neither", sum(!pp_df_4_only$pp_signif & !pp_df_4_only$limma_signif)
+)
+```
+
+Print results:
+
+```{r print-overlap-results}
+DT::datatable(overlap_df)
+```
+
+And lazy latex:
+
+```{r lazy-latex, results = 'asis'}
+print(xtable::xtable(overlap_df))
 ```
 
 ## Inferred pseudotimes
@@ -254,6 +301,50 @@ right_grid <- plot_grid(limma_plot, phenopath_plot, ncol = 1,
 
 plot_grid(left_grid, right_grid, nrow = 1)
 ggsave("../../figs/simulations_all.png", width = 11, height = 8)
+```
+
+## Example gene figure
+
+```{r example-gene-figure}
+fData(sce)$regime <- pp_df$regime
+sce$x <- factor(sce$x)
+
+sce2 <- sce
+sce2 <- sce2[, order(as.numeric(sampleNames(sce2)))]
+count_mat <- read_csv("../../data/simulations/count_matrix.csv")
+count_mat <- as.matrix(count_mat)
+colnames(count_mat) <- sampleNames(sce2)
+rownames(count_mat) <- featureNames(sce2)
+exprs(sce2) <- log2(count_mat)
+
+genes <- c(1, 101, 201, 301) + 2
+sce_marker <- sce2[genes,]
+regimes <- unique(pp_df$regime_txt)
+regime_labels <- paste0("(", 1:4, ") ", regimes)
+
+featureNames(sce_marker) <- regime_labels
+
+zplt <- plotExpression(sce_marker, features  = 1:4, 
+               x = "pst", colour_by = "x",
+               show_violin = FALSE, exprs_values = "exprs",
+               scales = "free_y", ncol = 4) + 
+  # stat_smooth(se = F, method = "lm", formula = y ~ splines::ns(x, 3)) +
+  xlab("Pathway score, z") +
+ theme(strip.background = element_blank(),
+       strip.text.x = element_blank(),
+       legend.position = "none") +
+  ylab(expression(paste("Expression (", log[2], "(count))")))
+
+xplt <- plotExpression(sce_marker, features  = 1:4, 
+               x = "x", colour_by = "x",
+               show_violin = TRUE, exprs_values = "exprs",
+               scales = "free_y", ncol = 4)  +
+  theme(legend.position = "none") + xlab("Covariate, x") +
+  ylab(expression(paste("Expression (", log[2], "(count))")))
+
+plot_grid(xplt, zplt, nrow = 2, rel_heights = c(3,2))
+
+ggsave("../../figs/simulation_example_genes.png", width = 8, height = 5)
 ```
 
 ## Subfigure of main text

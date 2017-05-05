@@ -475,10 +475,12 @@ pt <- pt %>% mutate(monocle = cds$Pseudotime)
 
 monocle_fit <- lm(monocle ~ time, data = pt)
 monocle_r2 <- summary(monocle_fit)$r.squared
+```
 
+```{r plot-monocle}
 r2_df <- frame_data(
   ~ x, ~ y, ~ R2,
-  0, 80, paste0("R^{2}~with~capture~time:~", signif(monocle_r2, 1))
+  0.16, 30, paste0("R^{2}~with~capture~time:~", signif(monocle_r2, 1))
 )
 
 ggplot(pt, aes(x = tmap, y = monocle, color = time)) + geom_point() +
@@ -491,10 +493,9 @@ monocle_plot <- last_plot()
 ```
 
 ```{r put_altogether}
-plot_grid(dpt_sort_plot, NULL, dpt_plot, monocle_plot, 
-          labels = c("A", "", "B", "C"))
-ggsave("../../figs/s_compare_monocle_dpt.png", width = 10, height = 8)
-
+plot_grid(dpt_sort_plot, dpt_plot, monocle_plot, 
+          labels = c("A", "B", "C"), nrow = 1)
+ggsave("../../figs/s_compare_monocle_dpt.png", width = 14, height = 4)
 ```
 
 # Technical

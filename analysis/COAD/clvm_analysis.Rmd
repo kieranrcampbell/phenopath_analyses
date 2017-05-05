@@ -171,14 +171,22 @@ df_immune <- t(exprs(sce))[, immune_inds, drop=FALSE] %>%
 df_immune <- mutate(df_immune, 
                   gene_symbol = sapply(strsplit(gene, "_"), `[`, 1))
 
-ggplot(df_immune, aes(x = phenotime, y = expression, color = gene_symbol)) + 
-  geom_point(alpha = 0.4) +
-  facet_wrap(~ gene_symbol, scales = "free_y") + 
-  scale_color_brewer(palette = "Set1", name = "Gene") +
-  theme(legend.position = "none", strip.text.x = element_text(size = 9)) +
-  stat_smooth(se = FALSE, method = "lm", size = 2, formula = y ~ ns(x,3)) +
+ggplot(df_immune, aes(x = phenotime, y = expression, fill = gene_symbol)) + 
+  geom_point(shape = 21, color = 'grey10') +
+  facet_wrap(~ gene_symbol, scales = "free_y", ncol = 1) + 
+  scale_fill_brewer(palette = "Pastel1", name = "Gene") +
+  #stat_smooth(se = FALSE, method = "lm", size = 1.5, 
+  #            formula = y ~ ns(x,3), color = 'black') +
   ylab(expression(paste("Expression log"[2], "(TPM+1)"))) +
-  xlab(expression(z))
+  xlab("Pathway score") +
+  theme(legend.position = "none", 
+        strip.text = element_text(size = 9),
+        strip.background = element_rect(colour = "black", fill = "grey95", 
+                                          size = 0.5, linetype = 1),
+        axis.text = element_text(size = 9),
+        axis.title = element_text(size = 10))
+
+saveRDS(last_plot(), "../../figs/coad/tregs.rds")
 
 ```
 

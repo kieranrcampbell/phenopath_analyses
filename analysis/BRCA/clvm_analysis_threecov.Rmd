@@ -24,6 +24,7 @@ library(reactome.db)
 library(clvm)
 library(biomaRt)
 library(goseq)
+library(ggforce)
 
 set.seed(123L)
 
@@ -40,11 +41,33 @@ arrange <- dplyr::arrange
 Load results:
 
 ```{r load-all-data}
-pcavi <- readRDS("../../data/BRCA/clvm_results.rds")
+pcavi <- readRDS("../../data/BRCA/clvm_results_threecov.rds")
 sce <- readRDS("../../data/BRCA/sce_brca_clvm.rds")
 
 x <- sce$x
 sce$tmap <- pcavi$m_t
+```
+
+And get the covariates:
+
+```{r covs}
+er_logical <- sce$ER == "positive"
+pr_logical <- sce$PR == "positive"
+h2 <- sce$IHC_HER2
+h2[is.na(h2)] <- "NA"
+her2_logical <- h2 == "Positive"
+
+to_string <- function(lgl, s) {
+  plyr::mapvalues(lgl, from = c(FALSE, TRUE), to = paste0(s, c("_negative", "_positive")))
+}
+
+ER <- to_string(er_logical, "ER")
+PR <- to_string(pr_logical, "PR")
+HER2 <- to_string(her2_logical, "HER2")
+
+lgl_df <- data_frame(ER = er_logical, PR = pr_logical, HER2 = her2_logical)
+
+subgroup <- paste(ER, PR, HER2, sep = "_")
 ```
 
 # Exploring phenotime results
@@ -53,51 +76,113 @@ sce$tmap <- pcavi$m_t
 
 ```{r pseudotime-vs-pc1}
 pc1 <- prcomp(t(exprs(sce)), scale = TRUE)$x[,1]
+zmap <- sce$tmap
 
-qplot(scale_vec(pc1), scale_vec(pcavi$m_t), color = factor(x)) +
-  scale_color_brewer(palette = "Set1", name = "x") +
-  stat_function(fun = function(x) x, color = 'black') + 
-  xlab("PC1") + ylab(expression(z))
+c_df <- mutate(lgl_df, pc1, zmap = pcavi$m_t) %>% 
+  gather(marker, is_positive, -pc1, -zmap)
+
+ggplot(c_df, aes(x = pc1, y = zmap, color = is_positive)) +
+  scale_colour_brewer(palette = "Set1") +
+  geom_point(alpha = 0.5) +
+  xlab("PC1") + ylab("z") +
+  facet_wrap(~ marker)
+
+xdf <- data_frame(subgroup, pc1 = scale_vec(pc1), zmap = scale_vec(zmap))
+
+ggplot(xdf, aes(x = pc1, y = zmap, color = subgroup)) +
+  geom_point(alpha = 0.5) +
+  scale_color_brewer(palette = "Set1") +
+  theme(legend.position = 'top') +
+  stat_function(fun = function(x) x, color = 'black', linetype = 2) +
+  facet_wrap(~ subgroup)
+
+
+xdf2 <- gather(xdf, measure, value, -subgroup)
+
+ggplot(xdf2, aes(x = subgroup, y = value, fill = measure)) +
+  geom_boxplot() + coord_flip()
 ```
 
 ## Identifying significant genes
 
-In the context of CAVI we have modelled each interaction coefficient by an approximating distribution of the form
-
-$$ \beta_{pg} \sim \text{Normal}(m_{\beta_{pg}}, s_{\beta_{pg}}^2) $$
-We define a _significant_ interaction if the $2 \sigma$ posterior doesn't cross zero, ie
-
-$$ m_{\beta_{pg}} - n s_{\beta_{pg}} > 0 $$
-or
-$$ m_{\beta_{pg}} + n s_{\beta_{pg}} < 0 $$
-
 Here we use $n=3$:
 
 ```{r beta-df}
+beta <- t(pcavi$m_beta)
+chi <- t(pcavi$chi_exp)
+sig <- significant_interactions(pcavi, n = 3)
+
+marker_names <- c("ER", "PR", "HER2")
+colnames(beta) <- paste0("beta_", marker_names)
+colnames(chi) <- paste0("chi_", marker_names)
+colnames(sig) <- paste0("sig_", marker_names)
+
 df_beta <- data_frame(
   c = pcavi$m_c,
-  beta = pcavi$m_beta[1,],
-  chi = pcavi$chi_exp[1,],
-  alpha = pcavi$m_alpha[1,],
   gene = featureNames(sce),
-  is_sig = as.vector(significant_interactions(pcavi, n = 3)),
   hgnc_symbol = fData(sce)$hgnc_symbol,
   ensembl_gene_id = fData(sce)$ensembl_gene_id
 )
 
-df_beta$is_sig_graph <- 
-  plyr::mapvalues(df_beta$is_sig, from = c(FALSE, TRUE),
-                  to = c("Non-significant", "Significant"))
+df_beta <- cbind(df_beta, beta, chi, sig) %>% as_data_frame()
 ```
 
-This gives:
+Pairs plot for interactions:
 
-```{r how-many-sig}
-print(sum(df_beta$is_sig))
-mean(df_beta$is_sig)
+```{r plot-beta}
+plot_beta <- function(df, x, y) {
+  xy_str <- paste0("beta_", c(x, y))
+  sig_str <- paste0("sig_", c(x,y))
+  both_sig <- df[[sig_str[1]]] & df[[sig_str[2]]]
+  df$both_sig <- both_sig
+  ggplot(df, aes_string(x = xy_str[1], y = xy_str[2], color = "both_sig")) + 
+    geom_point(alpha = 0.3) +
+    scale_color_brewer(palette = "Set2")
+}
+
+plot_grid(plot_beta(df_beta, "ER", "PR"),
+          plot_beta(df_beta, "ER", "HER2"),
+          plot_beta(df_beta, "PR", "HER2"),
+          nrow = 1)
 ```
 
-_significant_ interactions.
+Are there any genes that show concordance in all three?
+
+```{r all-three-same-direction}
+df_beta <- mutate(df_beta,
+                  triple_action = ((beta_ER > 0 & beta_PR > 0 & beta_HER2 > 0) |
+                    (beta_ER < 0 & beta_PR < 0 & beta_HER2 < 0)) &
+                    (sig_ER & sig_PR & sig_HER2))
+```
+
+Plot genes significant triple action:
+
+```{r plot-sig-all3}
+zmap <- pcavi$m_t
+
+df3 <- filter(df_beta, triple_action)
+agenes <- extract2(df3, "gene")
+hgnc <- extract2(df3, "hgnc_symbol")
+
+aex_df <- t(exprs(sce))[, agenes] %>% 
+  as_data_frame() 
+names(aex_df) <- hgnc
+
+aex_df <- mutate(aex_df, z = zmap, ER = er_logical, PR = pr_logical, HER2 = her2_logical)
+
+aex <- gather(aex_df, gene, expression, -(z:HER2))
+aex <- gather(aex, marker, marker_status, -z, -gene, -expression)
+
+ggplot(aex, aes(x = z, y = expression, color = marker_status)) +
+  geom_point(alpha = 0.1) +
+  facet_wrap(gene ~ marker, ncol = 3, scales = "free_y") +
+  theme_cowplot(font_size = 11) +
+  scale_color_brewer(palette = "Set1") +
+  theme(legend.position = "top") +
+  stat_smooth(method = 'lm')
+```
+
+
 
 We can plot these:
 
@@ -545,35 +630,10 @@ df_beta <- mutate(df_beta,
                   crossover = - alpha / beta)
 
 filter(df_beta, is_sig) %>% 
-  ggplot(aes(x = crossover)) + 
-  geom_histogram(fill = "white", color = "black", bins = 30) +
-  xlab("Crossover point") + ylab("Number of genes")
-
-cross_plot <- last_plot()
+  ggplot(aes(x = crossover)) + geom_histogram() +
+  xlab("Convergence point")
 
 ggsave("../../figs/supplementary_crossover.png", width = 6, height = 5)
-```
-
-Crossover GO analysis:
-
-```{r crossover-go}
-library(goseq)
-genome <- "hg19"
-id <- "ensGene"
-
-all_genes <- fData(sce)$ensembl_gene_id
-
-crossover_genes <- filter(df_beta, 
-                          is_sig & crossover > 0.4) %>% 
-  extract2("ensembl_gene_id") 
-
-crossg <- 1 * (all_genes %in% crossover_genes)
-names(crossg) <- all_genes
-
-pwfcross <- nullp(crossg, genome, id)
-gocross <- goseq(pwfcross, genome, id, test.cats = "GO:BP")
-
-pgo <- parse_go(gocross, "crossover", length(all_genes))
 ```
 
 Crossover plots:
@@ -585,7 +645,7 @@ cross_df <- dplyr::select(df_beta, gene, crossover, hgnc_symbol)
 
 top_genes <- dplyr::filter(df_beta, is_sig) %>% 
   arrange(desc(abs(beta))) %>% 
-  extract2("gene") %>% head(n=12)
+  extract2("gene") %>% head(n=20)
 
 df_gex <- t(exprs(sce))[, top_genes, drop=FALSE] %>% 
   as_data_frame() %>% 
@@ -601,15 +661,12 @@ df_gex <- inner_join(df_gex, cross_df, by = "gene")
 
 ggplot(df_gex, aes(x = phenotime, y = expression, color = x)) + 
   geom_point(alpha = 0.1) +
-  facet_wrap(~ hgnc_symbol, scales = "free_y", ncol = 3) + 
+  facet_wrap(~ hgnc_symbol, scales = "free_y") + 
   theme(legend.position = "top", strip.text.x = element_text(size = 9)) +
   stat_smooth(se = FALSE, method = "lm", size = 2) + 
-  scale_color_brewer(name = "", palette = 'Set1') +
+  scale_color_brewer(name = "ER_status", palette = 'Set1') +
   geom_vline(aes(xintercept = crossover), linetype = 2) +
-  xlab("Pathway score") +
-  ylab(expression(Expression ~ log[2] ~ "(TPM + 1)")) 
-
-saveRDS(last_plot(), "../../figs/brca/crossover_thesis.rds")
+  xlab("z")
 
 ggsave("../../figs/supplementary_crossover_2.png", width = 10, height = 9)
 ```
@@ -669,10 +726,6 @@ make_gene_plot <- function(genes) {
     dplyr::mutate(phenotime = tmap, x = as.character(x)) %>% 
     gather(gene, expression, -phenotime, -x)
   
-  cross_df_2 <- select(cross_df, crossover, hgnc_symbol) %>% 
-    dplyr::rename(gene = hgnc_symbol)
-  df <- inner_join(df, cross_df_2, by = "gene")
-  
   df$x[is.na(df$x)] <- "NA"
   df$x <- plyr::mapvalues(df$x, from = sort(unique(df$x)), to = c("ER-", "ER+"))
   
@@ -680,12 +733,10 @@ make_gene_plot <- function(genes) {
   
   df_nox <- dplyr::select(df, -x)
   
-  cols <- brewer.pal(5, "Set1")
-  
   ggplot(df, aes(x = phenotime, y = expression, fill = x, color = x)) + 
     geom_point(data = df_nox, color = "grey80", fill = "grey80") +
     geom_point(shape = 21, color = 'grey30', alpha = 0.7) +
-    facet_grid(x ~ gene, scales = "free") + 
+    facet_grid(gene ~ x, scales = "free") + 
     scale_fill_brewer(palette = "Set1", name = "MSI") +
     scale_color_brewer(palette = "Set1", name = "MSI") +
     theme(legend.position = "none", strip.text = element_text(size = 9),
@@ -693,14 +744,13 @@ make_gene_plot <- function(genes) {
                                           size = 0.5, linetype = 1)) +
   theme(axis.text = element_text(size = 9),
         axis.title = element_text(size = 10)) +
-    stat_smooth(se = FALSE, method = "lm", size = 1.5, #formula = y ~ ns(x,3),
+    stat_smooth(se = FALSE, method = "lm", size = 1.5, formula = y ~ ns(x,3),
                 color = 'grey30') +
     ylab(expression(Expression ~ log[2] ~ "(TPM + 1)")) + 
-    xlab("Pathway score (vascular development)") +
-    geom_vline(aes(xintercept = crossover), linetype = 2, color = "grey40")
+    xlab("Pathway score (vascular development)")
 }
 
-genes <- c("ESR1", "FBP1", "FOXA1", "FOXC1")
+genes <- c("FBP1", "RGMA")
 
 make_gene_plot(genes)
 
@@ -720,79 +770,10 @@ bottom_grid <- plot_grid(bottom_left, gene_plot, nrow = 1, labels = c("", "H"),
 plot_grid(lplot, bottom_grid, ncol = 1, rel_heights = c(2,1.2), labels = c("E",""),
           label_size = lsize)
 
-saveRDS(cross_plot, "../../figs/brca/cross_plot.rds")
 saveRDS(limma_plot, "../../figs/brca/limma_plot.rds")
 saveRDS(goplot, "../../figs/brca/goplot.rds")
 saveRDS(gene_plot, "../../figs/brca/gene_plot.rds")
 saveRDS(lplot, "../../figs/brca/lplot.rds")
 ```
 
-# Demanding supervisor plots
 
-## Vascular growth factors
-
-```{r vasc-growth-fact}
-x_str <- plyr::mapvalues(x, from = sort(unique(x)),
-                         to = c("ER-", "ER+"))
-tmap <- sce$tmap
-sce_gene <- readRDS("../../data/BRCA/sce_brca_gene_level.rds")
-
-vgf <- c("VEGFA", "VEGFB", "VEGFC", "VEGFD", "FGF2", "CXCL8") 
-
-mm <- match(vgf, fData(sce_gene)$hgnc_symbol)
-
-vgf_exprs <- t(exprs(sce_gene)[mm, ]) %>% as_data_frame()
-names(vgf_exprs) <- vgf
-vgf_exprs <- mutate(vgf_exprs, z = tmap, ER_status = x_str)
-vgf_exprs_tidy <- gather(vgf_exprs, gene, expression, -z, -ER_status)
-
-ggplot(vgf_exprs_tidy, aes(x = z, y = expression, color = ER_status)) +
-  geom_point(alpha = 0.6) + facet_wrap(~ gene, scales = "free_y") +
-  xlab("Pathway score") + ylab("Expression") +
-  theme(legend.position = "top") +
-  scale_color_brewer(palette = "Set1", name = "ER status") 
-
-ggsave("../../figs/supplementary_chris/vgf_genes.png", width = 8, height = 6)
-```
-
-"Can we plot these brca genes?"
-
-```{r brca-genes}
-brca_genes <- c("CEP55", "ESR1", "FOXA1", "FOXC1", "KRT17", "MAPT", "MELK", "MMP11", "NAT1", "SFRP1", "UBE2C", "UBE2T")
-
-mm <- match(brca_genes, fData(sce_gene)$hgnc_symbol)
-
-brca_exprs <- t(exprs(sce_gene)[mm, ]) %>% as_data_frame()
-names(brca_exprs) <- brca_genes
-brca_exprs <- mutate(brca_exprs, z = tmap, ER_status = x_str)
-brca_exprs_tidy <- gather(brca_exprs, gene, expression, -z, -ER_status)
-
-ggplot(brca_exprs_tidy, aes(x = z, y = expression, color = ER_status)) +
-  geom_point(alpha = 0.6) + facet_wrap(~ gene, scales = "free_y") +
-  xlab("Pathway score") + ylab("Expression") +
-  theme(legend.position = "top") +
-  scale_color_brewer(palette = "Set1", name = "ER status") 
-
-ggsave("../../figs/supplementary_chris/brca_genes.png", width = 9, height = 6)
-```
-
-"Can we look at FBP1 vs SNAIL expression?"
-
-```{r fbp1-vs-snail}
-genes <- c("FBP1", "SNAI1")
-
-mm <- match(genes, fData(sce_gene)$hgnc_symbol)
-
-fs_exprs <- t(exprs(sce_gene)[mm, ]) %>% as_data_frame()
-names(fs_exprs) <- genes
-
-fs_exprs <- mutate(fs_exprs, ER_status = x_str)
-
-ggplot(fs_exprs, aes(x = FBP1, y = SNAI1, color = ER_status)) +
-  geom_point(alpha = 0.6) +
-  theme(legend.position = "top") +
-  scale_color_brewer(palette = "Set1", name = "ER status") +
-  xlab("FBP1 expression") + ylab("SNAIL expression")
-
-ggsave("../../figs/supplementary_chris/fbp1-vs-snail.png", width = 4, height = 4)
-```

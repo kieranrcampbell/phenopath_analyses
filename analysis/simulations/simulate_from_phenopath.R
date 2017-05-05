@@ -77,6 +77,8 @@ count_mat <- sapply(seq_len(nrow(pos_gex)), function(i) {
   NB(x, x / 3)
 })
 
+write_csv(as_data_frame(count_mat), "../../data/simulations/count_matrix.csv")
+
 # FASTA annotation
 fasta_file = system.file('extdata', 'chr22.fa', package='polyester')
 fasta = readDNAStringSet(fasta_file)
