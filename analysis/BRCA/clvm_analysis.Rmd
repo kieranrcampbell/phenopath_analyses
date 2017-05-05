@@ -700,7 +700,7 @@ make_gene_plot <- function(genes) {
     geom_vline(aes(xintercept = crossover), linetype = 2, color = "grey40")
 }
 
-genes <- c("ESR1", "FBP1", "FOXA1", "FOXC1")
+genes <- c("ESR1", "FBP1", "FOXC1")
 
 make_gene_plot(genes)
 

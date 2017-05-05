@@ -18,22 +18,25 @@ brca_crossplot <- brca_crossplot +
   
 
 lsize <- 11
-top_right <- plot_grid(plot_grid(NULL, brca_limma_plot, NULL, nrow = 1, rel_widths = c(1,6, 1)), 
-                       brca_goplot, brca_crossplot,
-                       ncol = 1, labels = c("B", "C", "D"),
+top_right <- plot_grid(NULL,
+                       plot_grid(NULL, brca_limma_plot, NULL, nrow = 1, rel_widths = c(1,6, 1)), 
+                       brca_goplot, NULL, rel_heights = c(0.3, 4, 4, 1),
+                       ncol = 1, labels = c("", "", "C", ""),
                        label_size = lsize)
 
 top_grid <- plot_grid(brca_lplot, top_right, ncol = 2, 
-                      labels = c("A", ""), label_size = lsize,
+                      labels = c("A", "B"), label_size = lsize,
                       rel_widths = c(2,1))
 
-gene_grid <- plot_grid(NULL, brca_gene_plot, NULL, rel_widths = c(1,8,1), nrow = 1,
-                       labels = c("", "E", ""), label_size = lsize)
+bottom_grid <- plot_grid(brca_gene_plot, brca_crossplot, 
+                       rel_widths = c(3,2), nrow = 1,
+                       labels = c("D", "E"), label_size = lsize)
 
-p <- plot_grid(top_grid, gene_grid, 
-               rel_heights = c(2,1), label_size = lsize, ncol = 1)
 
-ggsave("figs/brca_figure.png", p, width = 11, height = 9)
+p <- plot_grid(top_grid, bottom_grid, 
+               rel_heights = c(3,1.8), label_size = lsize, ncol = 1)
+
+ggsave("figs/brca_figure.png", p, width = 11, height = 10)
 
 
 
@@ -68,11 +71,10 @@ upper_grid <- plot_grid(coad_lplot, coad_tregs,
                         labels = c("A", "B"), nrow = 1, label_size = lsize,
                         rel_widths = c(3,1))
 
-bottom_grid <- plot_grid(coad_limma_plot, 
-                         plot_grid(NULL, coad_goplot, NULL, rel_heights = c(1,6,1), ncol = 1), 
-                         coad_gene_plot, nrow = 1,
+bottom_grid <- plot_grid(plot_grid(NULL, coad_goplot, NULL, rel_heights = c(1,6,1), ncol = 1), 
+                         coad_gene_plot, coad_limma_plot, nrow = 1,
                          label_size = lsize, labels = c("C", "D", "E"), 
-                         rel_widths = c(2,3,2))
+                         rel_widths = c(3,2,2))
 
 pc <- plot_grid(upper_grid, bottom_grid, ncol = 1, rel_heights = c(5,2.5))
 
