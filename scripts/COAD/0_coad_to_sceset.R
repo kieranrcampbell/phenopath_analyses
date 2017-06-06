@@ -101,6 +101,8 @@ rownames(coad_clinical_pd) <- coad_clinical_pd$CGHubAnalysisID
 sce <- newSCESet(tpmData = as.matrix(coad), countData = coad_counts,
                  phenoData = AnnotatedDataFrame(coad_clinical_pd))
 
+tpm(sce) <- as.matrix(coad)
+exprs(sce) <- log2(tpm(sce) + 1)
 
 fData(sce)$gene_type <- gene_type
 fData(sce)$ensembl_gene_id <- ensembl_gene_id

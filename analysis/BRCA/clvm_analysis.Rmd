@@ -45,6 +45,20 @@ sce <- readRDS("../../data/BRCA/sce_brca_clvm.rds")
 
 x <- sce$x
 sce$tmap <- pcavi$m_t
+
+```
+
+
+
+
+Plot the elbo:
+
+```{r plot-elbo}
+plot_elbo(pcavi) +
+  xlab(expression("CAVI iterations"~x10^{-1})) +
+  theme_cowplot(font_size = 11)
+
+ggsave("../../figs/elbo_brca.png", width = 5, height = 3)
 ```
 
 # Exploring phenotime results
@@ -102,7 +116,7 @@ _significant_ interactions.
 We can plot these:
 
 ```{r plot-sigs}
-chi_cutoff <- 1.45
+chi_cutoff <- 0.125
 df_beta <- mutate(df_beta, 
                   gene_symbol = sapply(strsplit(gene, "_"), `[`, 1))
 
@@ -135,7 +149,7 @@ sce$tmap <- tmap
 
 
 top_genes <- dplyr::filter(df_beta, is_sig) %>% 
-  arrange(desc(abs(beta))) %>% 
+  dplyr::arrange(desc(abs(beta))) %>% 
   extract2("gene") %>% head(n=20)
 
 t(exprs(sce))[, top_genes] %>% 
@@ -626,10 +640,10 @@ filter(df_beta, is_sig) %>%
 ```{r more-vis}
 textinfo <- frame_data(
   ~x, ~y, ~label,
-  1.4, 0.15, "Gene upregulated\nER+ increases upregulation",
-  1.4, -0.15, "Gene upregulated\nER+ decreases upregulation",
-  -1.5, 0.15, "Gene downregulated\nER+ decreases downregulation",
-  -1.5, -0.15, "Gene downregulated\nER+ increases downregulation"
+  0.6, 0.15, "Gene upregulated\nER+ increases upregulation",
+  0.6, -0.15, "Gene upregulated\nER+ decreases upregulation",
+  -0.7, 0.15, "Gene downregulated\nER+ decreases downregulation",
+  -0.7, -0.15, "Gene downregulated\nER+ increases downregulation"
 )
 
 cols <- RColorBrewer::brewer.pal(3, "Set2")
@@ -640,9 +654,9 @@ ggplot(df_beta, aes(x = c, y = beta, color = is_sig_graph)) +
   geom_vline(xintercept = 0, linetype = 2, alpha = 0.5) +
   geom_hline(yintercept = 0, linetype = 2, alpha = 0.5) +
   scale_color_manual(values = cols2, name = "Interaction") +
-  geom_text_repel(data = filter(df_beta, is_sig, abs(beta) > 1.2),
-                  aes(label = hgnc_symbol), color = 'black', 
-                  size = 2.5) +
+  geom_text_repel(data = dplyr::filter(df_beta, is_sig, abs(beta) > 0.7),
+                 aes(label = hgnc_symbol), color = 'black',
+                 size = 2.5) +
   ylab("Covariate pathway interaction") +
   xlab("Pathway loading") +
   theme(legend.position = 'bottom',

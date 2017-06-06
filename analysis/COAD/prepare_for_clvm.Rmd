@@ -26,12 +26,15 @@ sce <- sce[matrixStats::rowVars(tpm(sce)) > 0, ]
 is_exprs(sce) <- tpm(sce) > 0
 sce <- calculateQCMetrics(sce)
 
+
+
 hgnc_symbols <- sapply(strsplit(featureNames(sce), "_"), `[`, 2)
 
 dvar <- data_frame(var_exprs = matrixStats::rowVars(exprs(sce)),
+                   mad_exprs = matrixStats::rowMads(exprs(sce)),
                    hgnc_symbols)
 
-fData(sce)$var_exprs <- matrixStats::rowVars(exprs(sce))
+fData(sce)$var_exprs <- dvar$var_exprs
 fData(sce)$hgnc_symbols <- hgnc_symbols
 
 ## group factors to avoid low frequency ones
@@ -73,6 +76,9 @@ Data preparation:
 
 ```{r phenotime-data-preparation}
 sc_tumour <- sc[, sc$sample_type != "normal"]
+rm(sce)
+rm(sc)
+gc()
 ```
 
 Construct a gene level SCESet:
@@ -157,9 +163,12 @@ fData(sc_tumour_gene)$is_mmr <- is_mmr
 Select high variance genes:
 
 ```{r select-high-variance}
-var_exprs <- matrixStats::rowVars(exprs(sc_tumour_gene))
+library(matrixStats)
+var_exprs <- rowVars(exprs(sc_tumour_gene))
+mad_exprs <- rowMads(exprs(sc_tumour_gene))
+mean_exprs <- rowMeans(exprs(sc_tumour_gene))
 
-to_use <- var_exprs > 0.5 | fData(sc_tumour_gene)$is_mmr
+to_use <- mad_exprs > sqrt(0.5) | fData(sc_tumour_gene)$is_mmr
 
 print(paste("Retaining", sum(to_use), "genes"))
 print(paste(sum(fData(sc_tumour_gene)$is_mmr), "mmr genes"))

@@ -6,7 +6,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE, cache=FALSE}
-knitr::opts_chunk$set(echo = TRUE, cache = TRUE, fig.width = 6, fig.height = 4)
+knitr::opts_chunk$set(echo = TRUE, cache = FALSE, fig.width = 6, fig.height = 4)
 
 library(scater)
 library(tidyverse)
@@ -23,6 +23,8 @@ library(gplots)
 library(RColorBrewer)
 library(clvm)
 library(goseq)
+
+
 
 # http://stackoverflow.com/questions/18509527/first-letter-to-upper-case
 firstup <- function(x) {
@@ -51,6 +53,53 @@ xs <- sce$stimulant
 featureNames(sce) <- firstup(tolower(featureNames(sce)))
 ```
 
+
+
+```{r debugging2, eval = F}
+its <- 10:length(pcavi$elbos)
+
+df <- data_frame(scale_vec(pcavi$elys[its]), 
+                 scale_vec(pcavi$elps[its]), 
+                 scale_vec(pcavi$elqs[its]), 
+                 scale_vec(pcavi$elbos[its]), iter = its)#iter = 1:length(pcavi$elys))
+names(df) <- c("E[p(y|T)]", "E[p(T)]", "H[q(T)]", "ELBO", "Iter")
+gather(df, quantity, value, -Iter) %>%
+  ggplot(aes(x = Iter, y = value, color = quantity)) +
+  geom_line() +
+  theme(legend.position = "top", legend.title = element_blank()) +
+  labs(subtitle = "Scaled ELBO quantities") + facet_wrap(~ quantity)
+```
+
+
+More debugging:
+
+```{r more-debugging, eval = F}
+df <- bind_cols(pcavi[c('ts', 'cs', 'taus', 'alphas', 'betas')])
+df <- tbl_df(apply(df, 2, scale_vec))
+df$Iter <- 1:nrow(df)
+
+                
+gather(df, quantity, value, -Iter) %>% 
+  ggplot(aes(x = Iter, y = value, color = quantity)) +
+  geom_line() +
+  theme(legend.position = "top", legend.title = element_blank()) +
+  labs(subtitle = "Scaled ELBO quantities")
+```
+
+
+
+
+Plot the elbo:
+
+```{r plot-elbo}
+plot_elbo(pcavi) +
+  xlab(expression("CAVI iterations"~x10^{-1})) +
+  theme_cowplot(font_size = 11)
+
+ggsave("../../figs/elbo_shalek.png", width = 5, height = 3)
+```
+
+
 # Exploring phenotime results
 
 ## Comparison to PC1
@@ -58,11 +107,12 @@ featureNames(sce) <- firstup(tolower(featureNames(sce)))
 ```{r pseudotime-vs-pc1}
 pc1 <- prcomp(t(exprs(sce)), scale = TRUE)$x[,1]
  
-qplot(scale_vec(pc1), scale_vec(pcavi$m_t), color = factor(xs)) +
-  scale_color_brewer(palette = "Set1", name = "MSI-high") +
-  stat_function(fun = function(x) x, color = 'black') + 
+qplot(scale_vec(pc1), pcavi$m_t, color = factor(xs)) +
+  scale_color_brewer(palette = "Set1", name = "Stimulant") +
+  #stat_function(fun = function(x) x, color = 'black') + 
   xlab("PC1") + ylab(expression(z))
 ```
+
 
 ## Identifying significant genes
 
@@ -74,7 +124,7 @@ df_beta <- data_frame(
   chi = pcavi$chi_exp[1,],
   alpha = pcavi$m_alpha[1,],
   gene = featureNames(sce),
-  is_sig = significant_interactions(pcavi, n = 3)
+  is_sig = significant_interactions(pcavi, n = 3)[,1]
 )
 
 
@@ -94,7 +144,7 @@ _significant_ interactions.
 We can plot these:
 
 ```{r plot-sigs}
-chi_cutoff <- 5
+chi_cutoff <- 0.2
 df_beta <- dplyr::mutate(df_beta, 
                   gene_symbol = gene)
 
@@ -103,7 +153,7 @@ ggplot(df_beta, aes(x = beta, y = 1 / chi, color = is_sig)) +
   geom_point(alpha = 0.8) +
   # geom_point(data = dplyr::filter(df_beta, is_mmr), alpha = 0.6) +
   scale_color_brewer(palette = "Set1", name = "'Significant'") +
-    geom_label_repel(data = dplyr::filter(df_beta, 1 / chi > chi_cutoff), aes(label = gene_symbol)) +
+     geom_label_repel(data = dplyr::filter(df_beta, 1 / chi > chi_cutoff), aes(label = gene_symbol)) +
   xlab(expression(beta)) +
   ylab(expression(paste("[", chi, "]"^-1)))
   
@@ -142,12 +192,13 @@ Check z loosely corresponds to time:
 
 ```{r dfz}
 tmap <- pcavi$m_t
-zdf <- data_frame(z = tmap, time = sce$time)
+zdf <- data_frame(z = tmap, time = sce$time, stimulant = xs)
 
 ggplot(zdf, aes(x = time, y = z, fill = time)) + 
   geom_violin(alpha = 0.8) +
   theme(legend.position = "none") + 
   scale_fill_brewer(palette = "Set1") +
+  # scale_fill_brewer(palette = "Set1") +
   xlab("Capture time") +
   ylab("Pathway score\n(pseudotime)") +
   theme(axis.text = element_text(size = 8),
@@ -188,7 +239,7 @@ make_gene_plot <- function(genes) {
     facet_grid(gene ~ x, scales = "free") + 
     scale_fill_brewer(palette = "Set1", name = "MSI") +
     scale_color_brewer(palette = "Set1", name = "MSI") +
-    theme(legend.position = "none", strip.text = element_text(size = 9),
+    theme(legend.position = "none", strip.text = element_text(size = 10, face = "bold"),
           strip.text.y = element_text(size = 8),
           strip.background = element_rect(colour = "black", fill = "grey95", 
                                           size = 0.5, linetype = 1)) +
@@ -201,8 +252,8 @@ make_gene_plot <- function(genes) {
     xlab("Pathway score (pseudotime)")
 }
 
-#genes <- c("OASL2", "TNF", "IFITM3")
-genes <- top_genes[1:5]
+# genes <- c("Ifi204", "Ms4a6c", "Procr")
+genes <- top_genes[1:4]
 
 make_gene_plot(genes)
 
@@ -290,10 +341,10 @@ filter(df_beta, is_sig) %>%
 ```{r more-vis}
 textinfo <- frame_data(
   ~x, ~y, ~label,
-  1.4, 0.35, "Gene upregulated along pseudotime\nLPS increases upregulation",
-  1.4, -0.35, "Gene upregulated along pseudotime\nPAM increases upregulation",
-  -1.5, 0.35, "Gene downregulated along pseudotime\nPAM increases downregulation",
-  -1.5, -0.35, "Gene downregulated along pseudotime\nLPS increases downregulation"
+  1, 0.2, "Gene upregulated along pseudotime\nLPS increases upregulation",
+  1, -0.2, "Gene upregulated along pseudotime\nPAM increases upregulation",
+  -1.1, 0.2, "Gene downregulated along pseudotime\nPAM increases downregulation",
+  -1.1, -0.2, "Gene downregulated along pseudotime\nLPS increases downregulation"
 )
 
 cols <- RColorBrewer::brewer.pal(3, "Set2")
@@ -304,9 +355,9 @@ ggplot(df_beta, aes(x = c, y = beta, color = is_sig_graph)) +
   geom_vline(xintercept = 0, linetype = 2, alpha = 0.5) +
   geom_hline(yintercept = 0, linetype = 2, alpha = 0.5) +
   scale_color_manual(values = cols2, name = "Interaction") +
-  geom_text_repel(data = dplyr::filter(df_beta, abs(beta) > 2),
-                 aes(label = gene), color = 'black',
-                 size = 2.5) +
+  geom_text_repel(data = dplyr::filter(df_beta, abs(beta) > 1.1),
+                aes(label = gene), color = 'black',
+                size = 2.5) +
   ylab("Covariate pathway interaction") +
   xlab("Pathway loading") +
   theme(legend.position = 'bottom',  #, legend.margin = margin(),
@@ -408,6 +459,30 @@ plot_grid(lplot, bottom_grid, ncol = 1, rel_heights = c(2,1.5), # labels = c("C"
 ggsave("../../figs/shalek.png", width = 9, height = 8)
 ```
 
+We also need one with lettering for thesis:
+
+```{r lettering}
+lsize <- 11
+
+bottom_top_left <- plot_grid(time_plot, NULL, de_plot, nrow = 1,
+                                rel_widths = c(7,1,6),
+                                labels = c("", "", "C"), 
+                             label_size = lsize, hjust = c(0.5, 0.5))
+
+bottom_left <- plot_grid(bottom_top_left, goplot,
+                         ncol = 1, labels = c("B", "D"),
+                         label_size = lsize)
+
+bottom_grid <- plot_grid(bottom_left, gene_plot, nrow = 1, labels = c("", "E"),
+                         label_size = lsize, rel_widths = c(4,5))
+
+pthesis <- plot_grid(lplot, bottom_grid, ncol = 1, rel_heights = c(2,1.5), labels = c("A",""),
+          label_size = lsize)
+
+ggsave("../../figs/shalek_thesis.png", pthesis, width = 9, height = 8)
+
+```
+
 ```{r check-expression-of-genes-time-series}
 d <- exprs(sce)[genes, ] %>% t() %>% 
   as_data_frame() %>% 
@@ -427,12 +502,14 @@ Linear model:
 
 ```{r linear-model}
 fit <- lm(pcavi$m_t ~ sce$time)
+time_numeric <- as.numeric(gsub("h", "", sce$time))
+fit2 <- lm(pcavi$m_t ~ time_numeric)
 print(summary(fit))
 ```
 
 DPT:
 
-```{r dpt}
+```{r dpt, eval = FALSE}
 library(dpt)
 ts <- Transitions(sce)
 pt <- dpt(ts, branching = FALSE)
@@ -464,7 +541,7 @@ dpt_plot <- last_plot()
 
 Monocle:
 
-```{r monocle}
+```{r monocle, eval = FALSE}
 library(monocle)
 sce@logged <- TRUE
 cds <- toCellDataSet(sce)
@@ -477,7 +554,7 @@ monocle_fit <- lm(monocle ~ time, data = pt)
 monocle_r2 <- summary(monocle_fit)$r.squared
 ```
 
-```{r plot-monocle}
+```{r plot-monocle, eval = FALSE}
 r2_df <- frame_data(
   ~ x, ~ y, ~ R2,
   0.16, 30, paste0("R^{2}~with~capture~time:~", signif(monocle_r2, 1))
@@ -492,7 +569,7 @@ ggplot(pt, aes(x = tmap, y = monocle, color = time)) + geom_point() +
 monocle_plot <- last_plot()
 ```
 
-```{r put_altogether}
+```{r put_altogether, eval = FALSE}
 plot_grid(dpt_sort_plot, dpt_plot, monocle_plot, 
           labels = c("A", "B", "C"), nrow = 1)
 ggsave("../../figs/s_compare_monocle_dpt.png", width = 14, height = 4)

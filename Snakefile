@@ -35,9 +35,9 @@ kallisto_quants = expand("data/simulations/quant/sample_{sam}/abundance.tsv", sa
 
 rule all:
     input:
-        # "data/COAD/sce_coad.rds",
-        # "data/COAD/sce_coad_clvm.rds",
-        # "data/COAD/clvm_results.rds",
+        "data/COAD/sce_coad.rds",
+        "data/COAD/sce_coad_clvm.rds",
+        "data/COAD/clvm_results.rds",
         # "data/OV/sce_ov.rds",
         # "data/OV/sce_ov_clvm.rds",
         # "data/OV/clvm_results.rds",
@@ -45,15 +45,15 @@ rule all:
         "data/BRCA/sce_brca_clvm.rds",
         "data/BRCA/sce_brca_gene_level.rds",
         "data/BRCA/clvm_results.rds",
-        # "data/BRCA/expressed_genes.csv",
-        # "data/shalek/sce_shalek.rds",
-	# "data/shalek/sce_shalek_clvm.rds",
-        # "data/shalek/clvm_results.rds",
-        "data/BRCA/clvm_results_threecov.rds",
-        "data/BRCA/clvm_er_pos_results.rds",
-        "data/BRCA/clvm_tripleneg_results.rds",
-        "analysis/BRCA/clvm_analysis_tripleneg.html",
-        # plot_files_coad,
+        "data/BRCA/expressed_genes.csv",
+        "data/shalek/sce_shalek.rds",
+	    "data/shalek/sce_shalek_clvm.rds",
+        "data/shalek/clvm_results.rds",
+        #"data/BRCA/clvm_results_threecov.rds",
+        #"data/BRCA/clvm_er_pos_results.rds",
+        #"data/BRCA/clvm_tripleneg_results.rds",
+        #"analysis/BRCA/clvm_analysis_tripleneg.html",
+        plot_files_coad,
         plot_files_brca,
         "figs/supplementary_crossover.png",
         "figs/supplementary_crossover_2.png",
@@ -62,11 +62,11 @@ rule all:
         # fasta_files,
         # fastq_str1, fastq_str2,
         # kallisto_quants,
-        # "analysis/simulations/simulations.html",
-        # "figs/shalek.png",
-        # "figs/s_compare_monocle_dpt.png",
-        # "figs/shalek.png",
-        # "figs/s_compare_monocle_dpt.png",
+        "analysis/simulations/simulations.html",
+        "figs/shalek.png",
+        "figs/shalek_thesis.png",
+        "figs/s_compare_monocle_dpt.png",
+        "figs/shalek.png",
         "figs/coad_figure.png",
         "figs/brca_figure.png",
         "figs/brca/crossover_thesis.png"
@@ -74,47 +74,50 @@ rule all:
 
 ## ------ COAD -----
 
-# rule construct_scecoad:
-#     input:
-#         "data/COAD/TCGA_COAD_tpm.tsv.gz",
-#         "data/COAD/TCGA_COAD_counts.tsv.gz",
-#         "data/TCGA_ID_MAP.csv",
-#         "data/COAD/nm.4191-S3.xlsx",
-#         "data/COAD/coadread_tcga_clinical_data.tsv"
-#     output:
-#         "data/COAD/sce_coad.rds"
-#     shell:
-#         "Rscript {R_opts} scripts/COAD/0_coad_to_sceset.R"
-#
-#
-# rule prepare_coad:
-#     """
-#     This rule takes the transcript level quantification in data/COAD/sce_coad.Rdata,
-#     collapses it to gene level, pulls out interesting genes and turns into
-#     an SCESet with
-#     """
-#     input:
-#         "data/COAD/sce_coad.rds"
-#     output:
-#         "data/COAD/sce_coad_clvm.rds"
-#     shell:
-#         "Rscript -e \"rmarkdown::render('analysis/COAD/prepare_for_clvm.Rmd')\""
-#
-# rule coad_clvm:
-#     input:
-#         "data/COAD/sce_coad_clvm.rds"
-#     output:
-#         "data/COAD/clvm_results.rds"
-#     shell:
-#         "Rscript scripts/run_cavi.R {input} {output} 1"
+rule construct_scecoad:
+    input:
+        "data/COAD/TCGA_COAD_tpm.tsv.gz",
+        "data/COAD/TCGA_COAD_counts.tsv.gz",
+        "data/TCGA_ID_MAP.csv",
+        "data/COAD/nm.4191-S3.xlsx",
+        "data/COAD/coadread_tcga_clinical_data.tsv"
+    output:
+        "data/COAD/sce_coad.rds"
+    shell:
+        "Rscript {R_opts} scripts/COAD/0_coad_to_sceset.R"
+
+
+
+rule prepare_coad:
+    """
+    This rule takes the transcript level quantification in data/COAD/sce_coad.Rdata,
+    collapses it to gene level, pulls out interesting genes and turns into
+    an SCESet with
+    """
+    input:
+        "data/COAD/sce_coad.rds"
+    output:
+        "data/COAD/sce_coad_clvm.rds",
+        "analysis/COAD/prepare_for_clvm.html"
+    shell:
+        "Rscript -e \"rmarkdown::render('analysis/COAD/prepare_for_clvm.Rmd')\""
+
+rule coad_clvm:
+    input:
+        "data/COAD/sce_coad_clvm.rds"
+    output:
+        "data/COAD/clvm_results.rds"
+    shell:
+        "Rscript scripts/run_cavi.R {input} {output} 1 5e-7"
 
 rule coad_analysis:
     input:
         "data/COAD/clvm_results.rds",
-        "data/COAD/sce_coad_clvm.rds"
+        "data/COAD/sce_coad_clvm.rds",
     output:
         plot_files_coad,
-        "data/COAD/coad_interactions.csv"
+        "data/COAD/coad_interactions.csv",
+        'analysis/COAD/clvm_analysis.html'
     shell:
         "Rscript -e \"rmarkdown::render('analysis/COAD/clvm_analysis.Rmd')\""
 #
@@ -163,20 +166,20 @@ rule prepare_brca:
         "data/BRCA/sce_brca.rds"
     output:
         "data/BRCA/sce_brca_clvm.rds",
-        "data/BRCA/sce_brca_clvm_er_pos.rds",
+        # "data/BRCA/sce_brca_clvm_er_pos.rds",
         "data/BRCA/sce_brca_gene_level.rds",
         "data/BRCA/brca_pca_plot.rds"
     shell:
         "Rscript -e \"rmarkdown::render('analysis/BRCA/prepare_for_clvm.Rmd')\""
-#
-#
-# rule brca_clvm:
-#     input:
-#         "data/BRCA/sce_brca_clvm.rds"
-#     output:
-#         "data/BRCA/clvm_results.rds"
-#     shell:
-#         "Rscript scripts/run_cavi.R {input} {output} 1"
+
+
+rule brca_clvm:
+    input:
+        "data/BRCA/sce_brca_clvm.rds"
+    output:
+        "data/BRCA/clvm_results.rds"
+    shell:
+        "Rscript scripts/run_cavi.R {input} {output} 1 1e-10"
 
 rule brca_clvm_tripleneg:
     input:
@@ -215,83 +218,78 @@ rule brca_analysis:
     shell:
         "Rscript -e \"rmarkdown::render('analysis/BRCA/clvm_analysis.Rmd')\""
 
-rule brca_tripleneg_analysis:
-    input:
-        "data/BRCA/clvm_tripleneg_results.rds",
-        "data/BRCA/sce_brca_clvm.rds"
-    output:
-        "analysis/BRCA/clvm_analysis_tripleneg.html",
-        "figs/tripleneg/gene_plot.rds"
-    shell:
-        "Rscript -e \"rmarkdown::render('analysis/BRCA/clvm_analysis_tripleneg.Rmd')\""
-
-rule brca_tripleneg_figure:
-    input:
-        "figs/tripleneg/gene_plot.rds",
-    output:
-        "figs/triple_neg_figure.png"
-    shell:
-        "Rscript scripts/BRCA/2_make_tripleneg_figure.R"
-
-rule brca_threecov_clvm:
-    input:
-        "data/BRCA/sce_brca_clvm.rds"
-    output:
-        "data/BRCA/clvm_results_threecov.rds"
-    shell:
-        "Rscript scripts/BRCA/1_brca_three_covariate_clvm.R {input} {output}"
-
+# rule brca_tripleneg_analysis:
+#     input:
+#         "data/BRCA/clvm_tripleneg_results.rds",
+#         "data/BRCA/sce_brca_clvm.rds"
+#     output:
+#         "analysis/BRCA/clvm_analysis_tripleneg.html",
+#         "figs/tripleneg/gene_plot.rds"
+#     shell:
+#         "Rscript -e \"rmarkdown::render('analysis/BRCA/clvm_analysis_tripleneg.Rmd')\""
+#
+# rule brca_tripleneg_figure:
+#     input:
+#         "figs/tripleneg/gene_plot.rds",
+#     output:
+#         "figs/triple_neg_figure.png"
+#     shell:
+#         "Rscript scripts/BRCA/2_make_tripleneg_figure.R"
+#
+# rule brca_threecov_clvm:
+#     input:
+#         "data/BRCA/sce_brca_clvm.rds"
+#     output:
+#         "data/BRCA/clvm_results_threecov.rds"
+#     shell:
+#         "Rscript scripts/BRCA/1_brca_three_covariate_clvm.R {input} {output}"
+#
 
 
 
 #
 #
 # ## ---- Shalek ----
-#
-# rule shalek_to_sceset:
-#     input:
-#         "data/shalek/GSE48968_allgenesTPM_GSM1189042_GSM1190902.txt.gz"
-#     output:
-#         "data/shalek/sce_shalek.rds"
-#     shell:
-#         "Rscript scripts/shalek/shalek_to_sceset.R"
-#
-# rule prepare_shalek:
-#     input:
-#         "data/shalek/sce_shalek.rds"
-#     output:
-#         "data/shalek/sce_shalek_clvm.rds"
-#     shell:
-#         "Rscript -e \"rmarkdown::render('analysis/shalek/prepare_for_clvm.Rmd')\""
-#
-# rule shalek_clvm:
-#     input:
-#         "data/shalek/sce_shalek_clvm.rds"
-#     output:
-#         "data/shalek/clvm_results.rds"
-#     shell:
-#         "Rscript scripts/run_cavi.R {input} {output} 1"
 
+rule shalek_to_sceset:
+    input:
+        "data/shalek/GSE48968_allgenesTPM_GSM1189042_GSM1190902.txt.gz"
+    output:
+        "data/shalek/sce_shalek.rds"
+    shell:
+        "Rscript scripts/shalek/shalek_to_sceset.R"
 
 
 rule prepare_shalek:
     input:
         "data/shalek/sce_shalek.rds"
     output:
-        "data/shalek/sce_shalek_clvm.rds"
+        "data/shalek/sce_shalek_clvm.rds",
+        "analysis/shalek/prepare_for_clvm.html"
     shell:
         "Rscript -e \"rmarkdown::render('analysis/shalek/prepare_for_clvm.Rmd')\""
 
-# rule shalek_analysis:
-#     input:
-#         "data/shalek/clvm_results.rds"
-#     output:
-#         "figs/shalek.png",
-#         "figs/s_compare_monocle_dpt.png"
-#     shell:
-#         "Rscript -e \"rmarkdown::render('analysis/shalek/shalek_clvm_analysis.Rmd')\""
+rule shalek_clvm:
+    input:
+        "data/shalek/sce_shalek_clvm.rds"
+    output:
+        "data/shalek/clvm_results.rds"
+    shell:
+        "Rscript scripts/run_cavi.R {input} {output} 1 5e-7"
 
-## ---- Overall cancer figure
+
+rule shalek_analysis:
+    input:
+        "data/shalek/clvm_results.rds"
+    output:
+        "figs/shalek.png",
+        "figs/shalek_thesis.png",
+        # "figs/s_compare_monocle_dpt.png",
+        "analysis/shalek/shalek_clvm_analysis.html"
+    shell:
+        "Rscript -e \"rmarkdown::render('analysis/shalek/shalek_clvm_analysis.Rmd')\""
+
+## ---- Overall cancer figures
 
 rule cancer_figure:
     input:

@@ -2,3 +2,9 @@
 *_cache*
 *_files*
 *.xlsx
+*.pdf
+*.rds
+*.csv
+*.gz
+*.Rhistory
+*.tsv

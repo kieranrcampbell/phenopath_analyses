@@ -104,6 +104,8 @@ sce <- newSCESet(countData = as.matrix(brca_counts),
 exprs(sce) <- log2(as.matrix(brca) + 1)
 tpm(sce) <- as.matrix(brca)
 
+rm(brca_counts, brca, brca_clinical_pd, brca_clinical)
+gc()
 
 fData(sce)$gene_type <- gene_type
 fData(sce)$ensembl_gene_id <- ensembl_gene_id

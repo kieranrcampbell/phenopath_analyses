@@ -86,7 +86,7 @@ y <- scale(t(exprs(sce)))
 x <- cbind(pData(sce)[[ 'x' ]])
 
 
-pcavi <- clvm(y, x)
+pcavi <- clvm(y, x, elbo_tol = 1e-10)
 
 pc1 <- prcomp(t(exprs(sce)))$x[,1]
 
@@ -134,7 +134,7 @@ ggplot(pp_df, aes(x = regime_txt, y = abs(limma_coef), color = limma_signif)) +
   scale_color_brewer(palette = "Set2",
                      name = "Limma voom\nsignificant at 5% FDR") +
   theme_cowplot(font_size = 11) +
-  theme(legend.position = "right") +
+  theme(legend.position = "top") +
   theme(axis.text.x = element_text(size = 9),
         axis.title.y = element_text(size = 9))
 limma_plot <- last_plot()
@@ -148,7 +148,7 @@ ggplot(pp_df, aes(x = regime_txt, y = abs(pp_beta), color = pp_signif)) +
   scale_color_brewer(palette = "Set2",
                      name = expression(paste("PhenoPath\nsignificant at 2", sigma))) +
   theme_cowplot(font_size = 11) +
-  theme(legend.position = "right") +
+  theme(legend.position = "top") +
   theme(axis.text.x = element_text(size = 9))
 phenopath_plot <- last_plot()
 ```
@@ -299,8 +299,8 @@ left_grid <- plot_grid(pca_plot, comp_plot_2, ncol = 1, labels = c("A", ""))
 right_grid <- plot_grid(limma_plot, phenopath_plot, ncol = 1,
                         labels = c("C", "D"))
 
-plot_grid(left_grid, right_grid, nrow = 1)
-ggsave("../../figs/simulations_all.png", width = 11, height = 8)
+plot_grid(left_grid, right_grid, nrow = 1, rel_widths = c(4,5))
+ggsave("../../figs/simulations_all.png", width = 12, height = 8)
 ```
 
 ## Example gene figure

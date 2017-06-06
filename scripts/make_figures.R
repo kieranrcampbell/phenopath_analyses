@@ -31,8 +31,8 @@ ggplot(df_pred, aes(x = pst, y = y, color = covariate)) +
   geom_line(size = 1.5) +
   scale_color_brewer(name = "Discrete\nCovariate", palette = "Set1") +
   xlab("Trajectory") + ylab("Gene expression") +
-  theme(legend.text = element_blank(), legend.direction = "vertical",
-        legend.position = "left", axis.text = element_blank(),
+  theme(legend.text = element_blank(), #legend.direction = "vertical",
+        legend.position = "top", axis.text = element_blank(),
         axis.ticks = element_blank(), axis.title = element_text(size = 11),
         legend.title = element_text(size = 11))
 
@@ -63,7 +63,7 @@ dfc %>% arrange(mu0, pst) %>%
   scale_color_viridis(name = "Continuous\nCovariate") +
   theme(legend.text = element_blank(), # legend.direction = "horizontal",
         legend.title = element_text(size = 11),
-        legend.position = "right", axis.text = element_blank(),
+        legend.position = "top", axis.text = element_blank(),
         axis.ticks = element_blank(), axis.title = element_text(size = 11),
         legend.key.size = unit(.2, "cm")) +
   xlab("Trajectory") + ylab("Gene expression")
@@ -75,7 +75,7 @@ plot_grid(discrete_plot, continuous_plot, rel_widths = c(10, 11))
 phenotime_diagram <- last_plot()
 
 # save(phenotime_diagram, file = "../figs/phenotime_diagram.Rdata")
-ggsave("../figs/method_diagram.png", width = 9, height = 1.5)
+ggsave("../figs/method_diagram.png", width = 7, height = 3.5)
 
 
 
